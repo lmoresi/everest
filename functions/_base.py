@@ -284,8 +284,8 @@ class Function(Pyklet):
     def op(self, arg, **kwargs):
         return Operation(self, op = arg, **kwargs)
 
-    def exc(self, exc = Exception, altval = None):
-        return Trier(self, exc = exc, altval = altval)
+    def exc(self, exc = Exception, altVal = None):
+        return Trier(self, exc = exc, altVal = altVal)
 
 class Getter:
     def __init__(self, host):

@@ -3,15 +3,18 @@ from ._base import \
     FunctionException, FunctionMissingAsset, NullValueDetected, EvaluationError
 
 class Trier(Function):
-    def __init__(self, func, exc = Exception, altval = None):
-        if not isinstance(func, Function):
+    def __init__(self, tryFunc, exc = Exception, altVal = None):
+        if not isinstance(tryFunc, Function):
             raise TypeError
-        if not (isinstance(exc, Exception) or issubclass(exc, Exception)):
-            raise TypeError
-        self.func, self.exc, self.altval = func, exc, altval
-        super().__init__(func, exc = exc, altval = altval)
+        if not type(exc) is tuple:
+            excTuple = (exc,)
+        for e in excTuple:
+            if not (isinstance(e, Exception) or issubclass(e, Exception)):
+                raise TypeError
+        self.tryFunc, self.exc, self.altVal = tryFunc, exc, altVal
+        super().__init__(tryFunc, exc = exc, altVal = altVal)
     def _evaluate(self):
         try:
-            return func.value
+            return self.tryFunc.value
         except self.exc:
-            return altval
+            return self.altVal

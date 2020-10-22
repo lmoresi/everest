@@ -62,10 +62,6 @@ class Value(Function):
                 return None
             else:
                 try:
-                    if np.issubdtype(type(value), np.integer):
-                        plain = int(value)
-                    else:
-                        plain = float(value)
                     value = self.dtype(value)
                     self._value = value
                 except TypeError:

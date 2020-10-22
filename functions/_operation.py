@@ -46,3 +46,5 @@ class Operation(Function):
                 return False
             else:
                 raise NullValueDetected
+
+from ._seq import Seq
