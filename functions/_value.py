@@ -52,8 +52,6 @@ class Value(Function):
         else:
             self.value = value
 
-        assert not self.open
-
     def _isnull(self):
         return self._value is None
 

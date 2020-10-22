@@ -37,8 +37,10 @@ class Function(Pyklet):
         else:
             self.arg = terms
         self.args = self.terms
-        self.kwargs = kwargs
-        super().__init__(*terms, name = name, **kwargs)
+        self.kwargs = {**kwargs}
+        if not self._name is None:
+            self.kwargs['name'] = self.name
+        super().__init__(*self.args, **self.kwargs)
 
     @staticmethod
     def _value_resolve(val):
@@ -153,9 +155,6 @@ class Function(Pyklet):
         else:
             outObj = self
         return outObj
-
-    # def __eq__(self, arg):
-    #     return self.value == arg
 
     def _operate(self, *args, op = None, **kwargs):
         return Operation(self, *args, op = op, **kwargs)

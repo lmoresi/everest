@@ -1,2 +1,2 @@
-from ._base import Function
+from ._base import *
 Fn = Function
