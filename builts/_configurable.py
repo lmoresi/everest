@@ -77,29 +77,30 @@ class Config(Pyklet):
     #     raise ConfigMissingMethod
 
 class Configs(Pyklet, Mapping, Sequence):
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-    def _hashID(self):
-        return w_hash(tuple(self.contents.items()))
     @property
     def contents(self):
         return self._contentsDict
+
     def __getitem__(self, arg):
         if type(arg) is str:
             return self.contents[arg]
         else:
             return list(self.contents.values())[arg]
+    def __len__(self):
+        return len(self.contents)
     def __iter__(self):
         for i in range(len(self)):
             yield self[i]
+
     def keys(self, *args, **kwargs):
         return list(self.contents.keys(*args, **kwargs))
     def values(self, *args, **kwargs):
         return list(self.contents.values(*args, **kwargs))
     def items(self, *args, **kwargs):
         return self.contents.items(*args, **kwargs)
-    def __len__(self):
-        return len(self.contents)
     def apply(self, state):
         if not isinstance(state, State):
             raise TypeError
@@ -115,10 +116,15 @@ class Configs(Pyklet, Mapping, Sequence):
                     c.apply(m)
                 else:
                     m.mutate(c)
+
     @property
     def id(self):
         return self.contentHash
+    def _hashID(self):
+        return w_hash(tuple(self.contents.items()))
+
 class MutableConfigs(Configs):
+
     def __init__(self, defaults, *args, contents = None, **kwargs):
         if type(defaults) is type(self):
             defaults = defaults.contents.copy()
@@ -156,6 +162,7 @@ class MutableConfigs(Configs):
                 (new.keys(), ks),
                 )
         return OrderedDict([(k, new[k]) for k in ks])
+
     def __setitem__(self, arg1, arg2):
         arg2 = Config.convert(arg2, self.defaults[arg1])
         if type(arg1) is str:
@@ -170,6 +177,7 @@ class MutableConfigs(Configs):
                 self.contents[k] = arg2
         else:
             raise ValueError
+
     def clear(self):
         self.contents.update(self.defaults)
     def update(self, inDict):
@@ -183,7 +191,9 @@ class MutableConfigs(Configs):
             defaults = self.defaults,
             contents = self.contents.copy()
             )
+
 class ImmutableConfigs(Configs):
+
     def __init__(self, *args, contents = OrderedDict(), **kwargs):
         self._contentsDict = contents.copy()
         super().__init__(*args, contents = contents, **kwargs)
@@ -290,8 +300,8 @@ class Configurable(Stateful):
         pass
 
     def _outputSubKey(self):
-        for o in super()._outputSubKey(): yield o
         yield self.configs.contentHash
+        for o in super()._outputSubKey(): yield o
 
     def _save(self):
         super()._save()

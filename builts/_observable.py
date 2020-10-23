@@ -16,15 +16,17 @@ class NoObserver(EverestException):
 class ObservationModeError(EverestException):
     pass
 
-def _observation_mode(func):
-    @wraps(func)
-    def wrapper(self, *args, **kwargs):
-        try:
-            self._observation_mode_hook()
-            return getattr(self.observer, func.__name__)(*args, **kwargs)
-        except NoObserver:
-            return func(self, *args, **kwargs)
-    return wrapper
+# def _observation_mode(func):
+#     @wraps(func)
+#     def wrapper(self, *args, **kwargs):
+#         try:
+#             self._observation_mode_hook()
+#             print("here")
+#             divertFunc = getattr(self, '_observer_' + func.__name__.strip('_'))
+#             return divertFunc(*args, **kwargs)
+#         except NoObserver:
+#             return func(self, *args, **kwargs)
+#     return wrapper
 
 class Obs:
     def __init__(self, host):
@@ -35,42 +37,46 @@ class Obs:
         assert not host is None
         return host
     def __getattr__(self, key):
-        if key in dir(self):
-            return self.__dict__[key]
-        else:
+        try:
             return self._get_out(key)
+        except KeyError:
+            raise AttributeError
     def _get_out(self, key):
+        chosen = None
         for observer in self.host.observers:
-            try:
-                with observer(self.host):
-                    return self.host.outs[key]
-            except KeyError:
-                pass
-        for observerClass in self.host.observerClasses:
-            observer = observerClass()
-            if not observer in self.host.observers:
-                self.host.observers.append(observer)
-            try:
-                with observer(self.host):
-                    return self.host.outs[key]
-            except KeyError:
-                pass
-        raise KeyError
+            if key in observer.keys():
+                chosen = observer
+                break
+        if chosen is None:
+            for observerClass in self.host._observerClasses:
+                observer = observerClass()
+                if key in observer.keys():
+                    chosen = observer
+                    break
+        if chosen is None:
+            raise KeyError
+        with chosen(self.host):
+            return self.host.outs[key]
 
 class Observable(Producer):
 
     def __init__(self,
-            _observerClasses = [],
             **kwargs
             ):
 
-        self.observables = Grouper({})
         self._observer = None
         self.observers = WeakList()
-        self.observerClasses = WeakList()
-        self.observerClasses.extend(_observerClasses)
+        self._observerClasses = WeakList()
+        # self.observers = list()
+        # self._observerClasses = list()
         if 'observers' in self.ghosts:
-            self.observerClasses.extend(self.ghosts['observers'])
+            for o in self.ghosts['observers']:
+                if isinstance(o, Observer):
+                    self.observers.append(o)
+                elif type(o) is type(Observer):
+                    self._observerClasses.append(o)
+                else:
+                    raise TypeError
         self.obs = Obs(self)
 
         super().__init__(**kwargs)
@@ -87,16 +93,29 @@ class Observable(Producer):
             yield ''
 
     @property
+    def _observationMode(self):
+        return not self._observer is None
+
+    @property
     def observer(self):
-        if self._observer is None:
+        if not self._observationMode:
             raise NoObserver
         return self._observer
 
-    @_observation_mode
-    def evaluate(self):
-        return self._evaluate()
-    def _evaluate(self):
-        raise ObservableMissingAsset
+    def _out(self):
+        outs = super()._out()
+        if self._observationMode:
+            add = self.observer.out()
+        else:
+            add = {}
+        outs.update(add)
+        return outs
+    def _load(self, *args, **kwargs):
+        if not self._observer is None:
+            raise ObservationModeError(
+                "Cannot load state while in Observer Mode."
+                )
+        super()._load(*args, **kwargs)
 
     def _store(self, *args, **kwargs):
         super()._store(*args, **kwargs)
@@ -118,9 +137,5 @@ class Observable(Producer):
                 with observer(self):
                     self._clear(*args, **kwargs)
 
-    def _load(self, *args, **kwargs):
-        if not self._observer is None:
-            raise ObservationModeError(
-                "Cannot load state while in Observer Mode."
-                )
-        super()._load(*args, **kwargs)
+# At bottom to avoid circular reference
+from ._observer import Observer

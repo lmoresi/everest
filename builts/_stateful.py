@@ -6,6 +6,7 @@ import weakref
 import numpy as np
 
 from ._producer import Producer, Outs
+from ._observable import Observable
 from ..pyklet import Pyklet
 from ..utilities import make_hash, w_hash, get_hash
 
@@ -98,13 +99,10 @@ class State(Sequence, Mapping):
         return self.asdict.values()
 
     def out(self):
-        outs = super(Stateful, self.host)._out()
-        add = OrderedDict(zip(
+        return OrderedDict(zip(
             self.keys(),
             (v.data.copy() for v in self.vars)
             ))
-        outs.update(add)
-        return outs
 
     def save(self):
         return super(Stateful, self.host)._save()
@@ -125,11 +123,9 @@ class State(Sequence, Mapping):
             return self.vars[key]
     def __len__(self):
         return len(self.vars)
-    def __repr__(self):
-        keyvalstr = ', '.join('=='.join((k, str(v)))
-            for k, v in self.items()
-            )
-        return 'State{' + keyvalstr + '}'
+    def __iter__(self):
+        for v in self.vars:
+            yield v
 
     def __getattr__(self, key):
         try:
@@ -137,7 +133,13 @@ class State(Sequence, Mapping):
         except KeyError:
             raise AttributeError
 
-class Stateful(Producer):
+    def __repr__(self):
+        keyvalstr = ', '.join('=='.join((k, str(v)))
+            for k, v in self.items()
+            )
+        return 'State{' + keyvalstr + '}'
+
+class Stateful(Observable, Producer):
 
     def __init__(self,
             **kwargs
@@ -159,7 +161,13 @@ class Stateful(Producer):
         yield None
 
     def _out(self):
-        return self.state.out()
+        outs = super()._out()
+        if self._observationMode:
+            add = {}
+        else:
+            add = self.state.out()
+        outs.update(add)
+        return outs
     def _save(self):
         return self.state.save()
     def _load_process(self, outs):

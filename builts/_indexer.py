@@ -1,6 +1,7 @@
 from functools import wraps
 import weakref
 from collections import OrderedDict, namedtuple
+from collections.abc import Mapping, Sequence
 
 import numpy as np
 
@@ -25,7 +26,7 @@ class IndexerLoadRedundant(IndexerLoadFail):
 class NotIndexlike(TypeError, IndexerException):
     pass
 
-class Indices:
+class Indices(Mapping):
 
     def __init__(self, host):
         self._host = weakref.ref(host)
@@ -205,11 +206,6 @@ class Indices:
     def __eq__(self, arg):
         return all(i == a for i, a in zip(self, arg))
 
-    def __getattr__(self, key):
-        try:
-            return self.asdict[key]
-        except KeyError:
-            raise AttributeError
     def __getitem__(self, key):
         return self.asdict[key]
     def __len__(self):
@@ -217,6 +213,13 @@ class Indices:
     def __iter__(self):
         for i in range(len(self)):
             yield self.indexers[i]
+
+    def __getattr__(self, key):
+        try:
+            return self.asdict[key]
+        except KeyError:
+            raise AttributeError
+
     def __repr__(self):
         keyvalstr = ', '.join('=='.join((k, str(v)))
             for k, v in self.asdict.items()

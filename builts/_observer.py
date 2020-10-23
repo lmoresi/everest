@@ -2,10 +2,12 @@ from functools import wraps
 from contextlib import contextmanager
 import weakref
 from collections import OrderedDict
+from collections.abc import Mapping
 
 from . import Built
 from ._producer import Producer, Outs
 from ._observable import Observable
+from ._promptable import Promptable
 
 from ..utilities import Grouper
 
@@ -20,8 +22,6 @@ class AlreadyAttachedError(ObserverError):
     '''Observer is already attached to that subject.'''
 class NotAttachedError(ObserverError):
     '''Observer is not attached to a subject yet.'''
-class NoObservables(ObserverError):
-    '''Subject has no observables; it may need to be initialised first.'''
 
 def _attached(func):
     @wraps(func)
@@ -38,7 +38,60 @@ def _unattached(func):
         return func(self, *args, **kwargs)
     return wrapper
 
-class Observer(Built):
+class ObserverConstruct(Mapping):
+
+    def __new__(cls, host, subject, *args, **kwargs):
+        obj = super().__new__(cls)
+        obj._host = host
+        obj._subject = subject
+        return obj
+    def __init__(self, host = None, subject = None, **analysers):
+        self.analysers = OrderedDict(sorted(analysers.items()))
+        super().__init__()
+
+    @property
+    def host(self):
+        return self._host
+    @property
+    def subject(self):
+        return self._subject
+
+    def out(self):
+        return OrderedDict((k, v.value) for k, v in self.items())
+    def store(self):
+        with self.host(subject):
+            self.subject.store()
+    def save(self):
+        with self.host(subject):
+            self.subject.writeouts.add(self.host, 'observer')
+            self.subject.save()
+
+    def prompt(self):
+        self._prompt()
+    def _prompt(self):
+        # self.store()
+        pass
+
+    def __getitem__(self, key):
+        return self.analysers[key]
+    def __len__(self):
+        return len(self.analysers)
+    def __iter__(self):
+        for a in self.analysers.values():
+            yield a.evaluate
+
+    def keys(self):
+        return self.analysers.keys()
+    def items(self):
+        return self.analysers.items()
+
+    def __getattr__(self, name):
+        try:
+            return self.analysers[name].value
+        except KeyError:
+            raise AttributeError
+
+class Observer(Promptable):
 
     def __init__(self,
             **kwargs
@@ -63,7 +116,7 @@ class Observer(Built):
     def observe(self, subject):
         self.attach(subject)
         try:
-            yield
+            yield self.get_construct(subject)
         finally:
             self.detach(subject)
     def __call__(self, subject):
@@ -90,36 +143,44 @@ class Observer(Built):
             if not silent:
                 raise ObserverError("Observer not registered.")
 
-    @_attached
-    def evaluate(self):
-        return self.construct.evaluate()
+    def construct(self, subject):
+        construct = self._construct(subject)
+        if not isinstance(construct, ObserverConstruct):
+            raise ObserverError(
+                "Observer construct must inherit ObserverConstruct class."
+                )
+        return construct
 
-    # @_attached
-    # def store(self, *args, **kwargs):
-    #     return self.subject.store(*args, **kwargs)
-    #
-    # @_attached
-    # def save(self, *args, **kwargs):
-    #     self.subject.writeouts.add(self, 'observer')
-    #     return self.subject.save(*args, **kwargs)
+    def _construct(self, subject):
+        raise MissingAsset("Observer must provide _construct method.")
 
     @property
     @_attached
-    def construct(self):
-        if self.subject in self.constructs:
-            construct = self.constructs[self.subject]
-        else:
-            construct = self.observer_construct(self.subject)
-            self.constructs[self.subject] = construct
-        return construct
+    def active(self):
+        return self.get_construct(self.subject)
 
-    def observer_construct(self, subject):
-        observer = self._observer_construct(subject, self.inputs)
-        if not 'evaluate' in observer:
-            raise ObserverMissingAsset
-        return observer
-    def _observer_construct(self, observables, inputs):
-        return Grouper({})
+    def out(self):
+        return self.active.out()
+
+    def keys(self):
+        return self._keys()
+    def _keys(self):
+        raise MissingAsset("Observer must provide _keys method.")
+
+    def get_construct(self, subject):
+        try:
+            construct = self.constructs[subject]()
+            if construct is None: raise KeyError
+        except KeyError:
+            construct = self.construct(subject)
+            self.constructs[self.subject] = weakref.ref(construct)
+            return construct
+    def __getitem__(self, subject):
+        return self.get_construct(subject)
+
+    def prompt(self, prompter):
+        with self(prompter):
+            self.active.prompt()
 
     # def _prompt(self, prompter):
     #     # Overrides Promptable _prompt method:
