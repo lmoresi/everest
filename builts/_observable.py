@@ -105,7 +105,7 @@ class Observable(Producer):
     def _out(self):
         outs = super()._out()
         if self._observationMode:
-            add = self.observer.out()
+            add = self.observer._out()
         else:
             add = {}
         outs.update(add)
@@ -117,25 +117,25 @@ class Observable(Producer):
                 )
         super()._load(*args, **kwargs)
 
-    def _store(self, *args, **kwargs):
-        super()._store(*args, **kwargs)
-        if self._observer is None:
-            for observer in self.observers:
-                with observer(self):
-                    super().store(*args, **kwargs)
-    def _save(self, *args, **kwargs):
-        super()._save(*args, **kwargs)
-        if self._observer is None:
-            for observer in self.observers:
-                with observer(self):
-                    super().save(*args, **kwargs)
-                    self.writeouts.add(observer, 'observer')
-    def _clear(self, *args, **kwargs):
-        super()._clear(*args, **kwargs)
-        if self._observer is None:
-            for observer in self.observers:
-                with observer(self):
-                    self._clear(*args, **kwargs)
+    # def _store(self, *args, **kwargs):
+    #     super()._store(*args, **kwargs)
+    #     if self._observer is None:
+    #         for observer in self.observers:
+    #             with observer(self):
+    #                 super().store(*args, **kwargs)
+    # def _save(self, *args, **kwargs):
+    #     super()._save(*args, **kwargs)
+    #     if self._observer is None:
+    #         for observer in self.observers:
+    #             with observer(self):
+    #                 super().save(*args, **kwargs)
+    #                 self.writeouts.add(observer, 'observer')
+    # def _clear(self, *args, **kwargs):
+    #     super()._clear(*args, **kwargs)
+    #     if self._observer is None:
+    #         for observer in self.observers:
+    #             with observer(self):
+    #                 self._clear(*args, **kwargs)
 
 # At bottom to avoid circular reference
 from ._observer import Observer

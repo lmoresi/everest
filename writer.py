@@ -11,7 +11,7 @@ from collections import OrderedDict
 from . import disk
 H5Manager = disk.H5Manager
 from . import mpi
-from .pyklet import Pyklet
+from . import Pyklet
 from .globevars import \
     _BUILTTAG_, _CLASSTAG_, _BYTESTAG_, _STRINGTAG_, _EVALTAG_
 from .array import EverestArray

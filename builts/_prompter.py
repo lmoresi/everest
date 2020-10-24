@@ -1,9 +1,10 @@
-from ..weaklist import WeakList
+import weakref
 from functools import wraps
 
 from . import Built
 # from ._promptable import Promptable
 from ..exceptions import *
+from ..weaklist import WeakList
 
 class PrompterException(EverestException):
     pass
@@ -29,7 +30,7 @@ def _prompter_prompt_all(func):
     return wrapper
 
 class Promptees:
-    def __init__(self):
+    def __init__(self, host):
         self.promptees = WeakList()
         self._host = weakref.ref(host)
         super().__init__()
@@ -64,6 +65,6 @@ class Prompter(Built):
             **kwargs
             ):
 
-        self.promptees = Promptees()
+        self.promptees = Promptees(self)
 
         super().__init__(**kwargs)

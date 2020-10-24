@@ -1,5 +1,5 @@
 from ._indexer import Indexer
-from ..pyklet import Pyklet
+from .. import Pyklet
 from ..anchor import NoActiveAnchorError
 from ..reader import PathNotInFrameError
 

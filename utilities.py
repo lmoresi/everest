@@ -8,9 +8,10 @@ import warnings
 import random
 import pickle
 
-from . import mpi
-message = mpi.message
-from . import wordhash
+import wordhash
+w_hash = wordhash.w_hash
+
+from simpli import message
 
 from .exceptions import EverestException
 class GrouperSetAttrForbidden(EverestException):
@@ -112,37 +113,8 @@ def make_hash(obj):
         return get_hash(obj, make = False)
     except HashIDNotFound:
         pass
-    if type(obj) is str:
-        hexID = hashlib.md5(str(obj).encode()).hexdigest()
-        hashVal = str(int(hexID, 16))
-    elif isinstance(obj, Mapping):
-        obj = {**obj}
-        try:
-            obj = OrderedDict(sorted(obj.items()))
-        except TypeError:
-            warnings.warn(
-                "You have passed unorderable kwargs to be hashed; \
-                reproducibility is not guaranteed."
-                )
-        hashVal = make_hash(obj.items())
-    elif isinstance(obj, Sequence):
-        hashList = [make_hash(subObj) for subObj in obj]
-        hashVal = make_hash(str(hashList))
-    elif isinstance(obj, np.generic):
-        hashVal = make_hash(np.asscalar(obj))
-    else:
-        # hashObj = str(pickle.dumps(obj))
-        hashObj = repr(obj)
-        hexID = hashlib.md5(hashObj.encode()).hexdigest()
-        hashVal = str(int(hexID, 16))
-    return hashVal
+    return wordhash.make_hash(obj)
 
-def w_hash(obj):
-    return wordhash.get_random_phrase(
-        randomseed = make_hash(obj),
-        wordlength = 2,
-        phraselength = 2,
-        )
 class HashIDNotFound(EverestException):
     pass
 def get_hash(obj, make = True):

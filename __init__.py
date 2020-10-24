@@ -1,21 +1,13 @@
-# #
-# class MyClass:
-#     def __init__(self):
-#         print('Hello world!')
+# Requires:
+# simpli
+# funcy
+# wordhash
 
-# foo
-# bar
-# baz
-# qux
-# quux
-# corge
-# grault
-# garply
-# waldo
-# fred
-# plugh
-# xyzzy
-# thud
+import simpli as mpi
+import funcy as functions
+from funcy.pyklet import Pyklet
+Fn = Function = functions.Function
+Value = functions.Value
 
 # from .builts import load
 from .disk import H5Manager
@@ -25,4 +17,3 @@ from .writer import Writer
 from .scope import Scope
 from .fetch import Fetch
 from .user import User
-from .functions import Function, Fn

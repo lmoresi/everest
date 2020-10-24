@@ -1,7 +1,7 @@
 import numpy as np
 
 from ._indexer import Indexer
-from ..functions import Function
+from .. import Function
 
 class Chroner(Indexer):
 

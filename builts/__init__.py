@@ -7,15 +7,16 @@ from collections.abc import Mapping
 import inspect
 import warnings
 
+import wordhash
+from wordhash import random
+
 from ..utilities import Grouper, make_hash, w_hash
-from .. import wordhash
 from .. import disk
 from ..weaklist import WeakList
 from ..anchor import Anchor, _namepath_process, NoActiveAnchorError
 from ..globevars import _BUILTTAG_, _CLASSTAG_, _GHOSTTAG_
-from ..pyklet import Pyklet
+from .. import Pyklet
 from ..vectors import SchemaIterator
-from .. import random
 
 from ..exceptions import EverestException
 class BuiltException(EverestException):

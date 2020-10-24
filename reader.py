@@ -263,4 +263,4 @@ class Reader(H5Manager):
             return self._getitem(inp)
 
 # At bottom to avoid circular reference:
-from .pyklet import Pyklet
+from . import Pyklet

@@ -10,7 +10,7 @@ from . import Proxy
 from ._stateful import Stateful, Statelet, State
 from ._applier import Applier
 from ._configurator import Configurator
-from ..pyklet import Pyklet
+from .. import Pyklet
 from ..utilities import w_hash, get_hash, is_numeric
 
 from . import BuiltException, MissingMethod, MissingAttribute, MissingKwarg

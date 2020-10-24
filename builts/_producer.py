@@ -4,6 +4,8 @@ from collections.abc import Mapping
 from collections import OrderedDict
 import warnings
 
+import wordhash
+
 from .. import disk
 from ..reader import Reader
 from ..writer import Writer
@@ -14,7 +16,6 @@ from . import Built
 from ..array import EverestArray
 from .. import exceptions
 from ..utilities import Grouper, prettify_nbytes
-from .. import random
 
 class ProducerException(exceptions.EverestException):
     pass
@@ -201,7 +202,8 @@ class Producer(Built):
         self._update_randomstate()
 
     def _update_randomstate(self):
-        self._randomstate = random.randint(18)
+        print(wordhash.randint)
+        self._randomstate = wordhash.randint(18)
     @property
     def randomstate(self):
         return self._randomstate

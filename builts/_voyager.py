@@ -6,7 +6,7 @@ from ._cycler import Cycler
 from ._producer import LoadFail, _producer_update_outs
 from ._stampable import Stampable
 from ._prompter import Prompter, _prompter_prompt_all
-from ..functions import Function
+from .. import Function
 
 from . import BuiltException, MissingMethod, MissingAttribute, MissingKwarg
 class VoyagerException(BuiltException):

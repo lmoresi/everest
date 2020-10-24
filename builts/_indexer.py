@@ -6,7 +6,7 @@ from collections.abc import Mapping, Sequence
 import numpy as np
 
 from ._producer import Producer, LoadFail, OutsNull
-from ..functions import Fn, Value
+from .. import Fn, Value
 from ..anchor import NoActiveAnchorError
 from ..reader import PathNotInFrameError
 

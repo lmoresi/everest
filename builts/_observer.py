@@ -10,6 +10,7 @@ from ._observable import Observable
 from ._promptable import Promptable
 
 from ..utilities import Grouper
+from ..freq import Freq
 
 from ..exceptions import *
 class ObserverError(EverestException):
@@ -47,6 +48,7 @@ class ObserverConstruct(Mapping):
         return obj
     def __init__(self, host = None, subject = None, **analysers):
         self.analysers = OrderedDict(sorted(analysers.items()))
+        self.freq = Freq()
         super().__init__()
 
     @property
@@ -56,21 +58,26 @@ class ObserverConstruct(Mapping):
     def subject(self):
         return self._subject
 
-    def out(self):
+    def _out(self):
         return OrderedDict((k, v.value) for k, v in self.items())
+    def out(self):
+        with self.host(self.subject):
+            return self.host.out()
     def store(self):
-        with self.host(subject):
-            self.subject.store()
+        with self.host(self.subject):
+            self.host.store()
     def save(self):
-        with self.host(subject):
-            self.subject.writeouts.add(self.host, 'observer')
-            self.subject.save()
+        with self.host(self.subject):
+            self.host.save()
+    def clear(self):
+        with self.host(self.subject):
+            return self.host.clear()
 
     def prompt(self):
         self._prompt()
     def _prompt(self):
-        # self.store()
-        pass
+        if self.freq:
+            self.store()
 
     def __getitem__(self, key):
         return self.analysers[key]
@@ -114,11 +121,21 @@ class Observer(Promptable):
 
     @contextmanager
     def observe(self, subject):
-        self.attach(subject)
-        try:
-            yield self.get_construct(subject)
-        finally:
-            self.detach(subject)
+        if self.subject is None:
+            self.attach(subject)
+            try:
+                yield self.get_construct(subject)
+            finally:
+                self.detach(subject)
+        else:
+            if subject is self.subject:
+                try:
+                    yield
+                finally:
+                    pass
+            else:
+                raise AlreadyAttachedError
+
     def __call__(self, subject):
         return self.observe(subject)
 
@@ -159,8 +176,21 @@ class Observer(Promptable):
     def active(self):
         return self.get_construct(self.subject)
 
+    def _out(self):
+        return self.active._out()
+    @_attached
     def out(self):
-        return self.active.out()
+        return self.subject.out()
+    @_attached
+    def store(self):
+        self.subject.store()
+    @_attached
+    def save(self):
+        self.subject.writeouts.add(self, 'observer')
+        self.subject.save()
+    @_attached
+    def clear(self):
+        self.subject.clear()
 
     def keys(self):
         return self._keys()
@@ -170,11 +200,12 @@ class Observer(Promptable):
     def get_construct(self, subject):
         try:
             construct = self.constructs[subject]()
-            if construct is None: raise KeyError
+            if construct is None:
+                raise KeyError
         except KeyError:
             construct = self.construct(subject)
-            self.constructs[self.subject] = weakref.ref(construct)
-            return construct
+            self.constructs[subject] = weakref.ref(construct)
+        return construct
     def __getitem__(self, subject):
         return self.get_construct(subject)
 

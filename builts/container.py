@@ -7,7 +7,7 @@ from collections import OrderedDict
 from ..exceptions import EverestException
 from .. import mpi
 from .. import disk
-from ..pyklet import Pyklet
+from .. import Pyklet
 from . import Built, BuildProxy
 
 

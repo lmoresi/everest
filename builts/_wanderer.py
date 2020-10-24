@@ -16,8 +16,8 @@ from ._configurable import \
 from ._configurator import Configurator
 from ._indexer import IndexerLoadRedundant, IndexerLoadFail
 from .. import exceptions
-from ..functions import Function
-from ..pyklet import Pyklet
+from .. import Function
+from .. import Pyklet
 from ..utilities import is_numeric
 
 class WandererException(exceptions.EverestException):
