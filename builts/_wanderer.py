@@ -17,7 +17,6 @@ from ._configurator import Configurator
 from ._indexer import IndexerLoadRedundant, IndexerLoadFail
 from .. import exceptions
 from .. import Function
-from .. import Pyklet
 from ..utilities import is_numeric
 
 class WandererException(exceptions.EverestException):

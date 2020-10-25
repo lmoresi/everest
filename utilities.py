@@ -5,7 +5,6 @@ import inspect
 import numpy as np
 import hashlib
 import warnings
-import random
 import pickle
 
 import wordhash

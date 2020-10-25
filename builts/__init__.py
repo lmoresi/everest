@@ -15,7 +15,6 @@ from .. import disk
 from ..weaklist import WeakList
 from ..anchor import Anchor, _namepath_process, NoActiveAnchorError
 from ..globevars import _BUILTTAG_, _CLASSTAG_, _GHOSTTAG_
-from .. import Pyklet
 from ..vectors import SchemaIterator
 
 from ..exceptions import EverestException
@@ -419,22 +418,19 @@ class Proxy:
         return self._hashID()
 class ClassProxyException(ProxyException):
     pass
-class ClassProxy(Proxy, Pyklet):
+class ClassProxy(Proxy):
     def __init__(self, inp, **kwargs):
         Proxy.__init__(self, **kwargs)
         if type(inp) is self.meta:
             self.typeHash = inp.typeHash
             self.script = inp.script
-            Pyklet.__init__(self, self.script)
         elif type(inp) is str:
             try:
                 inp = self._process_tag(inp, _CLASSTAG_)
                 self.typeHash = inp
-                Pyklet.__init__(self, self.typeHash)
             except NotAProxyTag:
                 self.script = inp
                 self.typeHash = self.meta._type_hash(self.script)
-                Pyklet.__init__(self, self.script)
         else:
             raise TypeError
     def _realise(self):
@@ -455,7 +451,7 @@ class BuiltProxyException(ProxyException):
     pass
 class NotEnoughInformation(BuiltProxyException):
     pass
-class BuiltProxy(Proxy, Pyklet):
+class BuiltProxy(Proxy):
     def __init__(self, inp1, inp2 = None, **kwargs):
         Proxy.__init__(self, **kwargs)
         if inp2 is None:
@@ -482,10 +478,6 @@ class BuiltProxy(Proxy, Pyklet):
         self.clsproxy = clsproxy
         self.inputsHash = inputsHash
         self.typeHash = clsproxy.typeHash
-        if hasattr(self, 'inputs'):
-            Pyklet.__init__(self, self.clsproxy, self.inputs)
-        else:
-            Pyklet.__init__(self, self.clsproxy, self.inputsHash)
     def _realise(self, unique = False):
         cls = self.clsproxy.realised
         try:

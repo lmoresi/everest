@@ -7,11 +7,10 @@ from collections import OrderedDict
 from ..exceptions import EverestException
 from .. import mpi
 from .. import disk
-from .. import Pyklet
 from . import Built, BuildProxy
 
 
-class Ticket(Pyklet):
+class Ticket:
     def __init__(self, obj, spice = 0, timestamp = None):
         if timestamp is None:
             timestamp = mpi.share(time.time())

@@ -10,7 +10,6 @@ from . import Proxy
 from ._stateful import Stateful, Statelet, State
 from ._applier import Applier
 from ._configurator import Configurator
-from .. import Pyklet
 from ..utilities import w_hash, get_hash, is_numeric
 
 from . import BuiltException, MissingMethod, MissingAttribute, MissingKwarg
@@ -38,7 +37,7 @@ class ConfigsException(EverestException):
 class ConfigsMissingAttribute(EverestException):
     pass
 
-class Config(Pyklet):
+class Config:
     def __init__(self, *args, content = None, **kwargs):
         self.content = content
         super().__init__(*args, content = content, **kwargs)
@@ -76,7 +75,7 @@ class Config(Pyklet):
     # def _var(self):
     #     raise ConfigMissingMethod
 
-class Configs(Pyklet, Mapping, Sequence):
+class Configs(Mapping, Sequence):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

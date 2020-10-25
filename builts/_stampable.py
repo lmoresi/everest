@@ -1,11 +1,10 @@
 from ._indexer import Indexer
-from .. import Pyklet
 from ..anchor import NoActiveAnchorError
 from ..reader import PathNotInFrameError
 
-class Stamper(Pyklet):
+class Stamper:
     def __init__(self, *args,**kwargs):
-        super().__init__(*args, **kwargs)
+        super().__init__()
     def stamp(self, stampee):
         stampee._receive_stamp(self)
 

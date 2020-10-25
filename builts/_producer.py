@@ -13,7 +13,7 @@ from ..writer import Writer
 # from . import buffersize_exceeded
 # from ._promptable import Promptable
 from . import Built
-from ..array import EverestArray
+from ..array import AnchorArray
 from .. import exceptions
 from ..utilities import Grouper, prettify_nbytes
 
@@ -192,7 +192,7 @@ class Producer(Built):
 
         self.baselines = dict()
         for key, val in sorted(baselines.items()):
-            self.baselines[key] = EverestArray(val, extendable = False)
+            self.baselines[key] = AnchorArray(val, extendable = False)
 
         self._outs = OrderedDict()
         self._randomstate = None
@@ -287,7 +287,7 @@ class Producer(Built):
             raise ProducerNothingToSave
         self.writeouts.add(self, 'producer')
         for key, val in self.outs.zipstacked:
-            wrapped = EverestArray(val, extendable = True)
+            wrapped = AnchorArray(val, extendable = True)
             self.writeouts.add(wrapped, key)
         self.writeouts.add_dict(self.outs.collateral, 'collateral')
 

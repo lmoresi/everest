@@ -2,10 +2,10 @@
 # simpli
 # funcy
 # wordhash
+# h5anchor
 
 import simpli as mpi
 import funcy as functions
-from funcy.pyklet import Pyklet
 Fn = Function = functions.Function
 Value = functions.Value
 

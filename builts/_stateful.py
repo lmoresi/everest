@@ -7,7 +7,6 @@ import numpy as np
 
 from ._producer import Producer, Outs
 from ._observable import Observable
-from .. import Pyklet
 from ..utilities import make_hash, w_hash, get_hash
 
 from . import BuiltException, MissingMethod, MissingAttribute, MissingKwarg
