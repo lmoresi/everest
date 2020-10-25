@@ -23,7 +23,8 @@ class Statelet:
     def __init__(self, var, name):
         self._var, self._name = var, name
         super().__init__()
-    def _hashID(self):
+    @property
+    def hashID(self):
         return '_'.join([self.name, get_hash(self.var)])
     @property
     def var(self):

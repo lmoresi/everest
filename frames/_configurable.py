@@ -34,7 +34,8 @@ class Config:
     def __init__(self, *args, content = None, **kwargs):
         self.content = content
         # super().__init__(*args, content = content, **kwargs)
-    def _hashID(self):
+    @property
+    def hashID(self):
         return get_hash(self.content, make = True)
     def apply(self, toVar):
         if not isinstance(toVar, Statelet):
@@ -112,8 +113,9 @@ class Configs(Mapping, Sequence):
 
     @property
     def id(self):
-        return self.contentHash
-    def _hashID(self):
+        return self.hashID
+    @property
+    def hashID(self):
         return w_hash(tuple(self.contents.items()))
 
 class MutableConfigs(Configs):
@@ -213,9 +215,9 @@ class ConfigsHost(MutableConfigs):
         return host
 
     def set_configs(self, *args, new = None, **kwargs):
-        prevHash = self.contentHash
+        prevHash = self.hashID
         self._set_configs(*args, new = new, **kwargs)
-        newHash = self.contentHash
+        newHash = self.hashID
         self.configured = newHash == prevHash and self.configured
         if newHash != prevHash:
             self.host._configurable_changed_state_hook()
@@ -293,7 +295,7 @@ class Configurable(Stateful):
         pass
 
     def _outputSubKey(self):
-        yield self.configs.contentHash
+        yield self.configs.hashID
         for o in super()._outputSubKey(): yield o
 
     def _save(self):

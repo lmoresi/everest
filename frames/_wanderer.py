@@ -41,9 +41,9 @@ class WildConfigs(Stamper, ImmutableConfigs):
     def get_wild(cls, wanderer, slicer):
         obj = cls(wanderer, slicer)
         try:
-            obj = cls._premade[obj.contentHash]
+            obj = cls._premade[obj.hashID]
         except KeyError:
-            cls._premade[obj.contentHash] = obj
+            cls._premade[obj.hashID] = obj
         return obj
     def __init__(self, wanderer, slicer):
         self.start, self.stop = get_start_stop(wanderer, slicer)
@@ -100,13 +100,13 @@ class WildConfig(Config):
             return w_hash((
                 channel,
                 wanderer.hashID,
-                *[o.contentHash if hasattr(o, 'contentHash') else get_hash(o)
-                    for o in sliceTup]
+                *[get_hash(o) for o in sliceTup]
                 ))
-    def _hashID(self):
+    @property
+    def hashID(self):
         return self._wildconfigHashID
-    def _pickle(self):
-        return (self.wild, self.channel), OrderedDict()
+    # def _pickle(self):
+    #     return (self.wild, self.channel), OrderedDict()
     @property
     def data(self):
         return self.wild.data[self.channel]

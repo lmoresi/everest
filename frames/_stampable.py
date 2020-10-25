@@ -2,10 +2,14 @@ from h5anchor.anchor import NoActiveAnchorError
 from h5anchor.reader import PathNotInFrameError
 
 from ._indexer import Indexer
+from ..exceptions import *
 
 class Stamper:
     def __init__(self, *args,**kwargs):
         super().__init__()
+    @property
+    def hashID(self):
+        raise NotYetImplemented
     def stamp(self, stampee):
         stampee._receive_stamp(self)
 
