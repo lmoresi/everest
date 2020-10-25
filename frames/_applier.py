@@ -1,7 +1,7 @@
-from . import Built
+from . import Frame
 from ..weaklist import WeakList
 
-class Applier(Built):
+class Applier(Frame):
     def __init__(self, **kwargs):
         self._pre_apply_fns = WeakList()
         self._apply_fns = WeakList()

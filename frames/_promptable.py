@@ -1,7 +1,6 @@
-from . import Built
-from ..exceptions import *
+from . import Frame
 
-class Promptable(Built):
+class Promptable(Frame):
 
     def __init__(self,
             **kwargs

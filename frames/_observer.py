@@ -4,12 +4,12 @@ import weakref
 from collections import OrderedDict
 from collections.abc import Mapping
 
-from . import Built
+from grouper import Grouper
+
+from . import Frame
 from ._producer import Producer, Outs
 from ._observable import Observable
 from ._promptable import Promptable
-
-from ..utilities import Grouper
 from ..freq import Freq
 
 from ..exceptions import *

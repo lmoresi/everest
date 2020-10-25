@@ -1,21 +1,18 @@
 from functools import wraps
 
+from funcy import Function
+
 from ._stateful import Stateful
 from ._counter import Counter
 from ._cycler import Cycler
 from ._producer import LoadFail, _producer_update_outs
 from ._stampable import Stampable
 from ._prompter import Prompter, _prompter_prompt_all
-from .. import Function
 
-from . import BuiltException, MissingMethod, MissingAttribute, MissingKwarg
-class VoyagerException(BuiltException):
+from ..exceptions import *
+class VoyagerException(EverestException):
     pass
-class VoyagerMissingMethod(MissingMethod, VoyagerException):
-    pass
-class VoyagerMissingAttribute(MissingAttribute, VoyagerException):
-    pass
-class VoyagerMissingKwarg(MissingKwarg, VoyagerException):
+class VoyagerMissingAsset(MissingAsset, VoyagerException):
     pass
 class VoyagerAlreadyInitialised(VoyagerException):
     pass

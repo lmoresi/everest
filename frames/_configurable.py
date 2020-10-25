@@ -12,15 +12,10 @@ from ._applier import Applier
 from ._configurator import Configurator
 from ..utilities import w_hash, get_hash, is_numeric
 
-from . import BuiltException, MissingMethod, MissingAttribute, MissingKwarg
-from ..exceptions import EverestException, NotYetImplemented
-class ConfigurableException(BuiltException):
+from ..exceptions import *
+class ConfigurableException(EverestException):
     pass
-class ConfigurableMissingMethod(MissingMethod, ConfigurableException):
-    pass
-class ConfigurableMissingAttribute(MissingAttribute, ConfigurableException):
-    pass
-class ConfigurableMissingKwarg(MissingKwarg, ConfigurableException):
+class ConfigurableMissingAsset(MissingAsset, ConfigurableException):
     pass
 class ConfigurableAlreadyConfigured(ConfigurableException):
     pass
@@ -28,19 +23,17 @@ class CannotProcessConfigs(ConfigurableException):
     pass
 class ConfigException(EverestException):
     pass
-class ConfigMissingMethod(MissingMethod, ConfigException):
+class ConfigMissingAsset(MissingAsset, ConfigException):
     pass
 class ConfigCannotConvert(ConfigException):
     pass
 class ConfigsException(EverestException):
     pass
-class ConfigsMissingAttribute(EverestException):
-    pass
 
 class Config:
     def __init__(self, *args, content = None, **kwargs):
         self.content = content
-        super().__init__(*args, content = content, **kwargs)
+        # super().__init__(*args, content = content, **kwargs)
     def _hashID(self):
         return get_hash(self.content, make = True)
     def apply(self, toVar):
@@ -73,12 +66,13 @@ class Config:
     # def var(self):
     #     return self._var()
     # def _var(self):
-    #     raise ConfigMissingMethod
+    #     raise ConfigMissingAsset
 
 class Configs(Mapping, Sequence):
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+        pass
+        # super().__init__(*args, **kwargs)
     @property
     def contents(self):
         return self._contentsDict

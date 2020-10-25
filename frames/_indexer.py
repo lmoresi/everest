@@ -5,12 +5,13 @@ from collections.abc import Mapping, Sequence
 
 import numpy as np
 
-from ._producer import Producer, LoadFail, OutsNull
-from .. import Fn, Value
-from ..anchor import NoActiveAnchorError
-from ..reader import PathNotInFrameError
+from h5anchor.reader import PathNotInFrameError
+from h5anchor.anchor import NoActiveAnchorError
+from funcy import Fn, Value
 
-from ..exceptions import EverestException
+from ._producer import Producer, LoadFail, OutsNull
+
+from ..exceptions import *
 class IndexerException(EverestException):
     pass
 class IndexAlreadyLoaded(IndexerException):

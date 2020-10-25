@@ -1,6 +1,6 @@
-from . import Built
+from . import Frame
 
-class Cycler(Built):
+class Cycler(Frame):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
     def __call__(self):

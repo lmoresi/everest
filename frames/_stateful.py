@@ -9,19 +9,14 @@ from ._producer import Producer, Outs
 from ._observable import Observable
 from ..utilities import make_hash, w_hash, get_hash
 
-from . import BuiltException, MissingMethod, MissingAttribute, MissingKwarg
-from ..exceptions import EverestException
-class StatefulException(BuiltException):
+from ..exceptions import *
+class StatefulException(EverestException):
     pass
-class StatefulMissingMethod(MissingMethod, StatefulException):
-    pass
-class StatefulMissingAttribute(MissingAttribute, StatefulException):
-    pass
-class StatefulMissingKwarg(MissingKwarg, StatefulException):
+class StatefulMissingAsset(MissingAsset, StatefulException):
     pass
 class StateletException(EverestException):
     pass
-class StateletMissingMethod(EverestException):
+class StateletMissingAsset(EverestException):
     pass
 
 class Statelet:
@@ -43,7 +38,7 @@ class Statelet:
         return self._out()
     def _out(self):
         if not isinstance(self.var, np.ndarray):
-            raise StateletMissingMethod(
+            raise StateletMissingAsset(
                 "If var is not an array, provide a custom _out method."
                 )
         return self.var.copy()
@@ -52,7 +47,7 @@ class Statelet:
         return self._data()
     def _data(self):
         if not isinstance(self.var, np.ndarray):
-            raise StateletMissingMethod(
+            raise StateletMissingAsset(
                 "If var is not an array, provide a custom _data method."
                 )
         return self.var

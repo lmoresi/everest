@@ -5,6 +5,8 @@ from functools import wraps
 import warnings
 import weakref
 
+from funcy import Function
+
 from ..utilities import w_hash, get_hash
 from ._producer import NullValueDetected, OutsNull
 from ._voyager import Voyager, _voyager_initialise_if_necessary
@@ -15,14 +17,12 @@ from ._configurable import \
     CannotProcessConfigs
 from ._configurator import Configurator
 from ._indexer import IndexerLoadRedundant, IndexerLoadFail
-from .. import exceptions
-from .. import Function
-from ..utilities import is_numeric
+from ..exceptions import *
 
-class WandererException(exceptions.EverestException):
+class WandererException(EverestException):
     pass
 
-class WildConfigsException(exceptions.EverestException):
+class WildConfigsException(EverestException):
     pass
 class RedundantWildConfigs(WildConfigsException):
     pass

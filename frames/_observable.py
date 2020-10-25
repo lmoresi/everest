@@ -1,9 +1,9 @@
 from functools import wraps
 import weakref
 
+from grouper import Grouper
+
 from ._producer import Producer
-from . import Meta
-from ..utilities import Grouper
 from ..weaklist import WeakList
 
 from ..exceptions import *

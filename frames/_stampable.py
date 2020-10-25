@@ -1,6 +1,7 @@
+from h5anchor.anchor import NoActiveAnchorError
+from h5anchor.reader import PathNotInFrameError
+
 from ._indexer import Indexer
-from ..anchor import NoActiveAnchorError
-from ..reader import PathNotInFrameError
 
 class Stamper:
     def __init__(self, *args,**kwargs):

@@ -1,7 +1,7 @@
 import weakref
 from functools import wraps
 
-from . import Built
+from . import Frame
 # from ._promptable import Promptable
 from ..exceptions import *
 from ..weaklist import WeakList
@@ -59,7 +59,7 @@ class Promptees:
     def __repr__(self):
         return str(self.promptees)
 
-class Prompter(Built):
+class Prompter(Frame):
 
     def __init__(self,
             **kwargs

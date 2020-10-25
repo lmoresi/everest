@@ -1,6 +1,6 @@
 import numpy as np
 
-from everest.builts._voyager import Voyager
+from everest.frames._voyager import Voyager
 
 class PiMachine(Voyager):
     # Implements the Bailey-Borwein-Plouffe formula;

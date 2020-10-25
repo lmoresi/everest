@@ -1,23 +1,20 @@
 import numpy as np
+import math
 from functools import wraps
 from collections.abc import Mapping
 from collections import OrderedDict
 import warnings
 
 import wordhash
+from h5anchor import Reader, Writer, disk
+from h5anchor.array import AnchorArray
+from grouper import Grouper
 
-from .. import disk
-from ..reader import Reader
-from ..writer import Writer
+from . import Frame
+from ..exceptions import *
+from ..utilities import prettify_nbytes, make_hash
 
-# from . import buffersize_exceeded
-# from ._promptable import Promptable
-from . import Built
-from ..array import AnchorArray
-from .. import exceptions
-from ..utilities import Grouper, prettify_nbytes
-
-class ProducerException(exceptions.EverestException):
+class ProducerException(EverestException):
     pass
 class ProducerNoOuts(ProducerException):
     pass
@@ -35,15 +32,8 @@ class ProducerNothingToSave(ProducerSaveFail):
     pass
 class AbortStore(ProducerException):
     pass
-# class ProducerMissingMethod(exceptions.MissingMethod):
+# class ProducerMissingAsset(exceptions.MissingAsset):
 #     pass
-
-from collections import OrderedDict
-import numpy as np
-import math
-
-from everest.utilities import make_hash
-from everest.builts._producer import ProducerException
 
 class OutsException(ProducerException):
     pass
@@ -181,7 +171,7 @@ def _producer_update_outs(func):
         return toReturn
     return wrapper
 
-class Producer(Built):
+class Producer(Frame):
 
     _defaultOutputSubKey = 'default'
 
@@ -202,7 +192,6 @@ class Producer(Built):
         self._update_randomstate()
 
     def _update_randomstate(self):
-        print(wordhash.randint)
         self._randomstate = wordhash.randint(18)
     @property
     def randomstate(self):
