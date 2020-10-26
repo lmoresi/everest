@@ -9,6 +9,7 @@ import wordhash
 from h5anchor import Reader, Writer, disk
 from h5anchor.array import AnchorArray
 from grouper import Grouper
+import reseed
 
 from . import Frame
 from ..exceptions import *
@@ -192,7 +193,7 @@ class Producer(Frame):
         self._update_randomstate()
 
     def _update_randomstate(self):
-        self._randomstate = wordhash.randint(18)
+        self._randomstate = reseed.randdigits(18)
     @property
     def randomstate(self):
         return self._randomstate

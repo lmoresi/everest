@@ -5,6 +5,8 @@ import weakref
 
 import numpy as np
 
+import funcy
+
 from ._producer import Producer, Outs
 from ._observable import Observable
 from ..utilities import make_hash, w_hash, get_hash
@@ -21,8 +23,13 @@ class StateletMissingAsset(EverestException):
 
 class Statelet:
     def __init__(self, var, name):
+
         self._var, self._name = var, name
         super().__init__()
+    @staticmethod
+    def _check_var_type(var):
+
+
     @property
     def hashID(self):
         return '_'.join([self.name, get_hash(self.var)])
@@ -38,16 +45,17 @@ class Statelet:
     def out(self):
         return self._out()
     def _out(self):
-        if not isinstance(self.var, np.ndarray):
+        if not isinstance(self.var, (np.ndarray, funcy.Function)):
             raise StateletMissingAsset(
-                "If var is not an array, provide a custom _out method."
+                "If var is not an array or funcy function, \
+                provide a custom _out method."
                 )
         return self.var.copy()
     @property
     def data(self):
         return self._data()
     def _data(self):
-        if not isinstance(self.var, np.ndarray):
+        if not isinstance(self.var, (np.ndarray, funcy.Function)):
             raise StateletMissingAsset(
                 "If var is not an array, provide a custom _data method."
                 )

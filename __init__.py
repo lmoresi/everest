@@ -7,7 +7,6 @@
 import simpli as mpi
 import funcy as functions
 Fn = Function = functions.Function
-Value = functions.Value
 from h5anchor import *
 
 #

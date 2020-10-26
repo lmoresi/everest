@@ -7,7 +7,7 @@ import numpy as np
 
 from h5anchor.reader import PathNotInFrameError
 from h5anchor.anchor import NoActiveAnchorError
-from funcy import Fn, Value
+from funcy import Fn
 
 from ._producer import Producer, LoadFail, OutsNull
 
@@ -69,7 +69,7 @@ class Indices(Mapping):
         except NotIndexlike:
             return False
     def _get_metaIndex(self, arg):
-        if type(arg) is Value:
+        if isinstance(arg, Fn):
             arg = arg.value
         trueTypes = [issubclass(type(arg), t) for t in self.types]
         if any(trueTypes):

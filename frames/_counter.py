@@ -7,14 +7,11 @@ from ._indexer import Indexer
 class Counter(Indexer):
 
     _defaultCountsKey = 'count'
-    _defaultCountNullVal = -999999999
 
     def __init__(self, **kwargs):
-        self._countNullVal = self._defaultCountNullVal
         self._countsKey = self._defaultCountsKey
         self._count = Function(
-            self._countNullVal,
-            initial = 'null',
+            np.int32,
             name = self._countsKey,
             )
         super().__init__(**kwargs)

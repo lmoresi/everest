@@ -10,11 +10,9 @@ class Chroner(Indexer):
     _defaultChronNullVal = float('nan')
 
     def __init__(self, **kwargs):
-        self._chronNullVal = self._defaultChronNullVal
         self._chronsKey = self._defaultChronsKey
         self._chron = Function(
-            self._chronNullVal,
-            initial = 'null',
+            np.float32,
             name = self._chronsKey,
             )
         super().__init__(**kwargs)
