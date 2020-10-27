@@ -11,7 +11,7 @@ from ..utilities import w_hash, get_hash
 from ._producer import NullValueDetected, OutsNull
 from ._voyager import Voyager, _voyager_initialise_if_necessary
 from ._stampable import Stampable, Stamper
-from ._stateful import State, Statelet
+from ._stateful import State
 from ._configurable import \
     Configurable, MutableConfigs, ImmutableConfigs, Configs, Config, \
     CannotProcessConfigs
@@ -87,10 +87,6 @@ class WildConfigs(Stamper, ImmutableConfigs):
 class WildConfig(Config):
     def __init__(self, wild, channel):
         self.wild, self.channel = wild, channel
-        self._wildconfigHashID = self._make_hashID(
-            self.channel,
-            *self.wild._wildArgs
-            )
         super().__init__(content = (self.channel, self.wild._wildArgs))
     @staticmethod
     def _make_hashID(channel, wanderer, sliceTup):
@@ -104,17 +100,17 @@ class WildConfig(Config):
                 ))
     @property
     def hashID(self):
+        if not hasattr(self, '_wildconfigHashID'):
+            self._wildconfigHashID = self._make_hashID(
+                self.channel,
+                *self.wild._wildArgs
+                )
         return self._wildconfigHashID
-    # def _pickle(self):
-    #     return (self.wild, self.channel), OrderedDict()
     @property
-    def data(self):
-        return self.wild.data[self.channel]
-    @property
-    def statelet(self):
+    def stateVar(self):
         return self.wild.state[self.channel]
     def _apply(self, toVar):
-        toVar.imitate(self.statelet)
+        toVar.value = self.stateVar
 
 def _de_comparator(obj):
     if isinstance(obj, Function) and hasattr(obj, 'index'):

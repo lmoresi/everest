@@ -7,7 +7,7 @@ import weakref
 import numpy as np
 
 from . import Proxy
-from ._stateful import Stateful, Statelet, State
+from ._stateful import Stateful, StateVar, State
 from ._applier import Applier
 from ._configurator import Configurator
 from ..utilities import w_hash, get_hash, is_numeric
@@ -38,11 +38,11 @@ class Config:
     def hashID(self):
         return get_hash(self.content, make = True)
     def apply(self, toVar):
-        if not isinstance(toVar, Statelet):
+        if not isinstance(toVar, StateVar):
             raise TypeError(type(toVar))
         self._apply(toVar)
     def _apply(self, toVar):
-        toVar.mutate(self.content)
+        toVar.value = self.content
     @classmethod
     def convert(cls, arg, default = None, strict = False):
         if default is Ellipsis and not arg is Ellipsis:
@@ -109,7 +109,7 @@ class Configs(Mapping, Sequence):
                 if isinstance(c, (Configurator, Config)):
                     c.apply(m)
                 else:
-                    m.mutate(c)
+                    m.value = c
 
     @property
     def id(self):

@@ -16,65 +16,10 @@ class StatefulException(EverestException):
     pass
 class StatefulMissingAsset(MissingAsset, StatefulException):
     pass
-class StateletException(EverestException):
-    pass
-class StateletMissingAsset(EverestException):
-    pass
 
-class Statelet:
-    def __init__(self, var, name):
-
-        self._var, self._name = var, name
-        super().__init__()
-    @staticmethod
-    def _check_var_type(var):
-
-
-    @property
-    def hashID(self):
-        return '_'.join([self.name, get_hash(self.var)])
-    @property
-    def var(self):
-        return self._var
-    @property
-    def name(self):
-        return self._name
-    @property
-    def varHash(self):
-        return make_hash(self.out())
-    def out(self):
-        return self._out()
-    def _out(self):
-        if not isinstance(self.var, (np.ndarray, funcy.Function)):
-            raise StateletMissingAsset(
-                "If var is not an array or funcy function, \
-                provide a custom _out method."
-                )
-        return self.var.copy()
-    @property
-    def data(self):
-        return self._data()
-    def _data(self):
-        if not isinstance(self.var, (np.ndarray, funcy.Function)):
-            raise StateletMissingAsset(
-                "If var is not an array, provide a custom _data method."
-                )
-        return self.var
-    def mutate(self, vals, indices = Ellipsis):
-        return self._mutate(vals, indices)
-    def _mutate(self, vals, indices = Ellipsis):
-        self.data[indices] = vals
-    def imitate(self, fromVar):
-        if not type(fromVar) is type(self):
-            raise TypeError
-        self._imitate(fromVar)
-    def _imitate(self, fromVar):
-        self.mutate(fromVar.data)
-
-    def __getitem__(self, arg):
-        return self.out()[arg]
-    def __setitem__(self, key, val):
-        self.mutate(val, indices = key)
+class StateVar(funcy.FixedVariable):
+    def _set_value(self, val):
+        super()._set_value(val)
 
 class State(Sequence, Mapping):
 
@@ -113,7 +58,7 @@ class State(Sequence, Mapping):
     def load_process(self, outs):
         outs = super(Stateful, self.host)._load_process(outs)
         for k, v in self.items():
-            v.mutate(outs.pop(k))
+            v.value = outs.pop(k)
         return outs
 
     def load(self, arg):
