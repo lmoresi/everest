@@ -1,5 +1,4 @@
 from functools import wraps
-import weakref
 from collections import OrderedDict, namedtuple
 from collections.abc import Mapping, Sequence
 
@@ -8,7 +7,10 @@ import numpy as np
 from h5anchor.reader import PathNotInFrameError
 from h5anchor.anchor import NoActiveAnchorError
 from funcy import Fn
+from funcy import exceptions as funcyex
 
+from ..utilities import make_scalar
+from ..hosted import Hosted
 from ._producer import Producer, LoadFail, OutsNull
 
 from ..exceptions import *
@@ -27,17 +29,10 @@ class IndexerLoadRedundant(IndexerLoadFail):
 class NotIndexlike(TypeError, IndexerException):
     pass
 
-class Indices(Mapping):
+class Indices(Mapping, Hosted):
 
     def __init__(self, host):
-        self._host = weakref.ref(host)
-        super().__init__()
-
-    @property
-    def host(self):
-        host = self._host()
-        assert not host is None
-        return host
+        super().__init__(host)
 
     @property
     def indexers(self):
@@ -70,7 +65,14 @@ class Indices(Mapping):
             return False
     def _get_metaIndex(self, arg):
         if isinstance(arg, Fn):
-            arg = arg.value
+            try:
+                arg = arg.value
+            except funcyex.EvaluationError:
+                raise NotIndexlike
+        try:
+            arg = make_scalar(arg)
+        except ValueError:
+            raise NotIndexlike
         trueTypes = [issubclass(type(arg), t) for t in self.types]
         if any(trueTypes):
             return trueTypes.index(True)
@@ -87,10 +89,11 @@ class Indices(Mapping):
     def process_endpoint(self, arg, close = False):
         i, ik, it = self._get_indexInfo(arg)
         if close:
-            target = self
+            target = Fn(self)
         else:
-            target = None
-        comp = Fn(target).get('indices', ik) >= self._process_index(arg)
+            target = Fn()
+        get = target.get('indices', ik)
+        comp = get >= self._process_index(arg)
         comp.index = arg
         return comp
 
@@ -183,7 +186,6 @@ class Indices(Mapping):
             raise IndexerLoadRedundant(vals, self)
         for val, i in zip(vals, self.indexers):
             i.value = val
-            assert i._value == val
         return outs
 
     def load(self, arg):

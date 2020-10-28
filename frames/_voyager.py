@@ -6,7 +6,6 @@ from ._stateful import Stateful
 from ._counter import Counter
 from ._cycler import Cycler
 from ._producer import LoadFail, _producer_update_outs
-from ._stampable import Stampable
 from ._prompter import Prompter, _prompter_prompt_all
 
 from ..exceptions import *
@@ -35,15 +34,15 @@ def _voyager_initialise_if_necessary(post = False):
 def _voyager_changed_state(func):
     @wraps(func)
     def wrapper(self, *args, **kwargs):
-        pc = (i._value for i in self.indices)
+        pc = (i.data for i in self.indices)
         out = func(self, *args, **kwargs)
-        nc = (i._value for i in self.indices)
+        nc = (i.data for i in self.indices)
         if nc != pc:
             self._voyager_changed_state_hook()
         return out
     return wrapper
 
-class Voyager(Stateful, Cycler, Counter, Stampable, Prompter):
+class Voyager(Stateful, Cycler, Counter, Prompter):
 
     def __init__(self,
             **kwargs
@@ -92,7 +91,8 @@ class Voyager(Stateful, Cycler, Counter, Stampable, Prompter):
             self._go()
             return None
         try:
-            self.load(stop)
+            # self.load(stop)
+            raise LoadFail
         except LoadFail:
             if not isinstance(stop, Function):
                 stop = self.indices.process_endpoint(stop, close = False)

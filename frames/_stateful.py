@@ -1,7 +1,6 @@
 from collections import OrderedDict
 from collections.abc import Mapping, Sequence
 from contextlib import contextmanager
-import weakref
 
 import numpy as np
 
@@ -9,6 +8,7 @@ import funcy
 
 from ._producer import Producer, Outs
 from ._observable import Observable
+from ..hosted import Hosted
 from ..utilities import make_hash, w_hash, get_hash
 
 from ..exceptions import *
@@ -23,69 +23,81 @@ class StateVar(funcy.FixedVariable):
 
 class State(Sequence, Mapping):
 
-    def __init__(self, host):
-        self._host = weakref.ref(host)
-        super().__init__()
-
-    @property
-    def host(self):
-        host = self._host()
-        assert not host is None
-        return host
+    def __init__(self):
+        for k, v in self.items():
+            setattr(self, k, v)
 
     @property
     def vars(self):
-        return tuple([*self.host._state_vars()][1:])
-    def keys(self):
-        return tuple([*self.host._state_keys()][1:])
+        try:
+            return self._vars
+        except AttributeError:
+            raise MissingAsset(
+                "Classes inheriting from State must provide _vars attribute."
+                )
+
+    def __getitem__(self, key):
+        if type(key) is str:
+            return self.vars[key]
+        else:
+            return list(self.values())[key]
+    def __len__(self):
+        return len(self.vars)
+    def __iter__(self):
+        return iter(self.vars)
+
+    def apply(self, state):
+        if not isinstance(state, State):
+            raise TypeError("States can only be applied to other States.")
+        if not [*state.keys()] == [*self.keys()]:
+            raise KeyError(state.keys(), self.keys())
+        self._apply(state)
+    def _apply(self, state):
+        for c, m in zip(self.values(), state.values()):
+            if not c is Ellipsis:
+                try:
+                    c.apply(m)
+                except AttributeError:
+                    m.value = c
+
     @property
-    def asdict(self):
-        return OrderedDict(zip(self.keys(), self.vars))
-    def items(self):
-        return self.asdict.items()
-    def values(self):
-        return self.asdict.values()
+    def id(self):
+        return self.hashID
+    @property
+    def hashID(self):
+        return w_hash(repr(self))
+    def __repr__(self):
+        keyvalstr = ', '.join(' == '.join((k, str(v)))
+            for k, v in self.items()
+            )
+        return type(self).__name__ + '{' + keyvalstr + '}'
+
+class DynamicState(State, Hosted):
+
+    def __init__(self, host):
+        Hosted.__init__(self, host)
+        State.__init__(self)
+    @property
+    def _vars(self):
+        return OrderedDict(zip(
+            tuple([*self.host._state_keys()][1:]),
+            tuple([*self.host._state_vars()][1:]),
+            ))
 
     def out(self):
         return OrderedDict(zip(
             self.keys(),
-            (v.data.copy() for v in self.vars)
+            (v.data for v in self.values())
             ))
-
     def save(self):
         return super(Stateful, self.host)._save()
-
     def load_process(self, outs):
         outs = super(Stateful, self.host)._load_process(outs)
         for k, v in self.items():
             v.value = outs.pop(k)
         return outs
-
     def load(self, arg):
         return super(Stateful, self.host)._load(arg)
-
-    def __getitem__(self, key):
-        try:
-            return self.asdict[key]
-        except KeyError:
-            return self.vars[key]
-    def __len__(self):
-        return len(self.vars)
-    def __iter__(self):
-        for v in self.vars:
-            yield v
-
-    def __getattr__(self, key):
-        try:
-            return self.asdict[key]
-        except KeyError:
-            raise AttributeError
-
-    def __repr__(self):
-        keyvalstr = ', '.join('=='.join((k, str(v)))
-            for k, v in self.items()
-            )
-        return 'State{' + keyvalstr + '}'
 
 class Stateful(Observable, Producer):
 
@@ -100,7 +112,7 @@ class Stateful(Observable, Producer):
     @property
     def state(self):
         if self._state is None:
-            self._state = State(self)
+            self._state = DynamicState(self)
         return self._state
 
     def _state_vars(self):

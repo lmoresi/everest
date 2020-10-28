@@ -1,4 +1,5 @@
 import numpy as np
+import numbers
 
 from funcy import Function
 
@@ -24,4 +25,4 @@ class Counter(Indexer):
         yield self._countsKey
     def _indexerTypes(self):
         for o in super()._indexerTypes(): yield o
-        yield (int, np.integer, np.int)
+        yield numbers.Integral

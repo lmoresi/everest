@@ -1,3 +1,4 @@
+import numbers
 import numpy as np
 
 from funcy import Function
