@@ -1,6 +1,7 @@
 from functools import wraps
 from collections import OrderedDict, namedtuple
 from collections.abc import Mapping, Sequence
+import numbers
 
 import numpy as np
 
@@ -14,19 +15,19 @@ from ..hosted import Hosted
 from ._producer import Producer, LoadFail, OutsNull
 
 from ..exceptions import *
-class IndexerException(EverestException):
+class IndexableException(EverestException):
     pass
-class IndexAlreadyLoaded(IndexerException):
+class IndexAlreadyLoaded(IndexableException):
     pass
-class IndexerNullVal(IndexerException):
+class IndexableNullVal(IndexableException):
     pass
-class IndexerLoadFail(LoadFail, IndexerException):
+class IndexableLoadFail(LoadFail, IndexableException):
     pass
-class IndexerLoadNull(IndexerLoadFail, IndexerNullVal):
+class IndexableLoadNull(IndexableLoadFail, IndexableNullVal):
     pass
-class IndexerLoadRedundant(IndexerLoadFail):
+class IndexableLoadRedundant(IndexableLoadFail):
     pass
-class NotIndexlike(TypeError, IndexerException):
+class NotIndexlike(TypeError, IndexableException):
     pass
 
 class Indices(Mapping, Hosted):
@@ -35,25 +36,13 @@ class Indices(Mapping, Hosted):
         super().__init__(host)
 
     @property
-    def indexers(self):
-        return tuple([*self.host._indexers()][1:])
-    @property
     def types(self):
-        return tuple([*self.host._indexerTypes()][1:])
-    def keys(self):
-        return tuple([*self.host._indexerKeys()][1:])
-    @property
-    def asdict(self):
-        return OrderedDict(zip(self.keys(), self.indexers))
-    def items(self):
-        return self.asdict.items()
-    def values(self):
-        return self.asdict.values()
+        return tuple(self.host._indexerTypes())
 
     @property
     def info(self):
         return list(zip(
-            self.indexers,
+            self.values(),
             self.keys(),
             self.types,
             ))
@@ -64,11 +53,11 @@ class Indices(Mapping, Hosted):
         except NotIndexlike:
             return False
     def _get_metaIndex(self, arg):
-        if isinstance(arg, Fn):
-            try:
-                arg = arg.value
-            except funcyex.EvaluationError:
-                raise NotIndexlike
+        # if isinstance(arg, Fn):
+        #     try:
+        #         arg = arg.value
+        #     except funcyex.EvaluationError:
+        #         raise NotIndexlike
         try:
             arg = make_scalar(arg)
         except ValueError:
@@ -78,40 +67,30 @@ class Indices(Mapping, Hosted):
             return trueTypes.index(True)
         else:
             raise NotIndexlike(repr(arg)[:100], type(arg))
-    def _get_indexInfo(self, arg):
+    def get_indexInfo(self, arg):
         return self.info[self._get_metaIndex(arg)]
-    def _process_index(self, arg):
-        i, ik, it = self._get_indexInfo(arg)
-        if arg < 0.:
-            return i - arg
-        else:
-            return arg
-    def process_endpoint(self, arg, close = False):
-        i, ik, it = self._get_indexInfo(arg)
-        if close:
-            target = Fn(self)
-        else:
-            target = Fn()
-        get = target.get('indices', ik)
-        comp = get >= self._process_index(arg)
-        comp.index = arg
-        return comp
+    def get_index(self, arg):
+        return tuple(self.values())[self._get_metaIndex(arg)]
+    # def _process_index(self, arg):
+    #     i, ik, it = self.get_indexInfo(arg)
+    #     if arg < 0.:
+    #         return i - arg
+    #     else:
+    #         return arg
 
     def nullify(self):
-        for indexer in self.indexers:
-            indexer.value = None
+        for k in self.keys(): self[k] = None
     def zero(self):
-        for indexer in self.indexers:
-            indexer.value = 0
+        for k in self.keys(): self[k] = 0
     @property
     def isnull(self):
-        return any([i.null for i in self.indexers])
+        return any([i.null for i in self.values()])
     @property
     def iszero(self):
         if self.isnull:
             return False
         else:
-            return any([i == 0 for i in self.indexers])
+            return any([i == 0 for i in self.values()])
     @property
     def ispos(self):
         return not (self.isnull or self.iszero)
@@ -165,26 +144,26 @@ class Indices(Mapping, Hosted):
         self.host.outs.drop(toDrop)
 
     def out(self):
-        outs = super(Indexer, self.host)._out()
+        outs = super(Indexable, self.host)._out()
         add = OrderedDict(zip(
             self.keys(),
-            [OutsNull if i.null else i.value for i in self.indexers]
+            [OutsNull if i.null else i.value for i in self.values()]
             ))
         outs.update(add)
         return outs
 
     def save(self):
-        self.indices.drop_clashes()
-        return super(Indexer, self.host)._save()
+        self.drop_clashes()
+        return super(Indexable, self.host)._save()
 
     def load_process(self, outs):
-        outs = super(Indexer, self.host)._load_process(outs)
+        outs = super(Indexable, self.host)._load_process(outs)
         vals = [outs.pop(k) for k in self.keys()]
         if any([v is OutsNull for v in vals]):
-            raise IndexerLoadNull
+            raise IndexableLoadNull
         if vals == self:
-            raise IndexerLoadRedundant(vals, self)
-        for val, i in zip(vals, self.indexers):
+            raise IndexableLoadRedundant(vals, self)
+        for val, i in zip(vals, self.values()):
             i.value = val
         return outs
 
@@ -192,49 +171,53 @@ class Indices(Mapping, Hosted):
         if isinstance(arg, Fn) and hasattr(arg, 'index'):
             arg = arg.index
         try:
-            i, ik, it = self._get_indexInfo(arg)
+            i, ik, it = self.get_indexInfo(arg)
         except TypeError:
-            return super(Indexer, self.host)._load(arg)
-        arg = self._process_index(arg)
+            return super(Indexable, self.host)._load(arg)
         try:
             ind = self.host.outs.index(**{ik: arg})
         except ValueError:
             try:
                 ind = self.disk[ik].index(arg)
             except (ValueError, NoActiveAnchorError, PathNotInFrameError):
-                raise IndexerLoadFail
+                raise IndexableLoadFail
             return self.host._load_index_disk(ind)
         return self.host._load_index_stored(ind)
 
     def __eq__(self, arg):
-        return all(i == a for i, a in zip(self, arg))
+        return all(i == a for i, a in zip(self.values(), arg))
 
     def __getitem__(self, key):
-        return self.asdict[key]
+        return dict(zip(
+            self.host._indexerKeys(),
+            self.host._indexers(),
+            ))[key]
     def __len__(self):
-        return len(self.indexers)
+        return len(tuple(self.host._indexerKeys()))
     def __iter__(self):
-        for i in range(len(self)):
-            yield self.indexers[i]
-
-    def __getattr__(self, key):
-        try:
-            return self.asdict[key]
-        except KeyError:
-            raise AttributeError
+        return self.host._indexerKeys()
+    def __setitem__(self, key, arg):
+        self[key].value = arg
 
     def __repr__(self):
         keyvalstr = ', '.join('=='.join((k, str(v)))
-            for k, v in self.asdict.items()
+            for k, v in self.items()
             )
         return 'Indices{' + keyvalstr + '}'
 
-class Indexer(Producer):
+class Indexable(Producer):
+
+    _defaultCountsKey = 'count'
 
     def __init__(self,
             **kwargs
             ):
         self._indices = None
+        self._countsKey = self._defaultCountsKey
+        self._count = Fn(
+            np.int32,
+            name = self._countsKey,
+            )
         super().__init__(**kwargs)
 
     @property
@@ -244,11 +227,11 @@ class Indexer(Producer):
         return self._indices
 
     def _indexers(self):
-        yield None
+        yield self._count
     def _indexerKeys(self):
-        yield None
+        yield self._countsKey
     def _indexerTypes(self):
-        yield None
+        yield numbers.Integral
 
     def _out(self):
         return self.indices.out()

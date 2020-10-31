@@ -8,6 +8,7 @@ import funcy
 
 from ._producer import Producer, Outs
 from ._observable import Observable
+from ._applier import Applier
 from ..hosted import Hosted
 from ..utilities import make_hash, w_hash, get_hash
 
@@ -24,8 +25,7 @@ class StateVar(funcy.FixedVariable):
 class State(Sequence, Mapping):
 
     def __init__(self):
-        for k, v in self.items():
-            setattr(self, k, v)
+        pass
 
     @property
     def vars(self):
@@ -55,10 +55,7 @@ class State(Sequence, Mapping):
     def _apply(self, state):
         for c, m in zip(self.values(), state.values()):
             if not c is Ellipsis:
-                try:
-                    c.apply(m)
-                except AttributeError:
-                    m.value = c
+                m.value = c
 
     @property
     def id(self):

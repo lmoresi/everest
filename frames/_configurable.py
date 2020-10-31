@@ -6,6 +6,7 @@ import numpy as np
 from funcy import Fn, convert
 
 from ._stateful import Stateful, State
+from ._configurator import Configurator
 from ..hosted import Hosted
 from ..utilities import ordered_unpack
 from ..exceptions import *
@@ -19,7 +20,12 @@ class Configs(State):
         super().__init__()
     @staticmethod
     def _process_config(v):
-        return convert(float('nan') if v is None else v)
+        if isinstance(v, Configurator):
+            return v
+        else:
+            if v is None:
+                v = float('nan')
+            return convert(v)
 
 class MutableConfigs(Configs):
     def __init__(self, defaults):
@@ -30,7 +36,6 @@ class MutableConfigs(Configs):
             if not k in self.keys():
                 raise KeyError("Key not in configs: ", k)
             self.vars[k] = convert(self.defaults[k] if v is None else v)
-            setattr(self, k, v)
     def clear(self):
         self.update(self.defaults)
     def update(self, arg):

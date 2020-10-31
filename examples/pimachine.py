@@ -1,8 +1,8 @@
 import numpy as np
 
-from everest.frames._voyager import Voyager
+from everest.frames._iterable import Iterable
 
-class PiMachine(Voyager):
+class PiMachine(Iterable):
     # Implements the Bailey-Borwein-Plouffe formula;
     # default args yield pi.
     def __init__(

@@ -3,9 +3,9 @@ import numpy as np
 
 from funcy import Function
 
-from ._indexer import Indexer
+from ._indexable import Indexable
 
-class Chroner(Indexer):
+class Chronable(Indexable):
 
     _defaultChronsKey = 'chron'
     _defaultChronNullVal = float('nan')
