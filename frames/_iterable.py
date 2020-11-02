@@ -4,6 +4,7 @@ import warnings
 
 from funcy import Fn, convert, NullValueDetected
 
+from . import Frame
 from ._stateful import Stateful, State
 from ._indexable import Indexable, NotIndexlike
 from ._producer import LoadFail, _producer_update_outs
@@ -50,6 +51,59 @@ def _iterable_changed_state(func):
             self._iterable_changed_state_hook()
         return out
     return wrapper
+
+class Locality(State):
+    def __init__(self, arg, *targs):
+        self.proxy = arg.proxy if isinstance(arg, Frame) else arg
+        self.target = targs[0] if len(targs) == 1 else targs
+        self._targs = targs
+        self._data = None
+        self._computed = False
+        super().__init__()
+    @property
+    def frame(self):
+        try:
+            return self._frame
+        except AttributeError:
+            frame = self.proxy.realise(unique = True)
+            self._frame = frame
+            return frame
+    def compute(self):
+        frame = self.frame
+        if self._data is None:
+            master = self.proxy.realise()
+            if not master is None:
+                frame._outs = master._outs
+            frame.reach(*self._targs)
+            self._data = frame.out()
+            self._indices = tuple(
+                [*(v.value for v in frame.indices.values())]
+                )
+        else:
+            frame.load(self._data)
+        self._computed = True
+    def _compute_wrap(func):
+        @wraps(func)
+        def wrapper(self, *args, **kwargs):
+            if not self._computed:
+                self.compute()
+            return func(self, *args, **kwargs)
+        return wrapper
+    @property
+    @_compute_wrap
+    def data(self):
+        return self._data
+    @property
+    @_compute_wrap
+    def indices(self):
+        return self._indices
+    @property
+    @_compute_wrap
+    def _vars(self):
+        return self.frame.state.vars
+    def __repr__(self):
+        content = [repr(self.proxy), *(repr(t) for t in self._targs)]
+        return 'Locality(' + ', '.join(content) + ')'
 
 class Iterable(Stateful, Indexable, Prompter):
 
@@ -265,6 +319,13 @@ class Iterable(Stateful, Indexable, Prompter):
                 except IndexableLoadFail:
                     self.initialise(silent = True)
         return super()._load(arg)
+
+    def __getitem__(self, key):
+        if type(key) is tuple:
+            raise ValueError
+        if type(key) is slice:
+            raise NotYetImplemented
+        return Locality(self, key)
 
 # class Locality(State):
 #     def __init__(self, iterable, locale):

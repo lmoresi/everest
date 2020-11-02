@@ -118,3 +118,10 @@ class Configurable(Stateful):
                 self.configs[...] = self.reader[readpath]
         else:
             super()._load(arg)
+
+    def __setitem__(self, key, val):
+        if type(val) is tuple:
+            raise ValueError
+        if type(val) is slice:
+            raise NotYetImplemented
+        self.configs[key] = val

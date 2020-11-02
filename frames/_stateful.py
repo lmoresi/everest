@@ -57,17 +57,17 @@ class State(Sequence, Mapping):
             if not c is Ellipsis:
                 m.value = c
 
-    @property
-    def id(self):
-        return self.hashID
-    @property
-    def hashID(self):
-        return w_hash(repr(self))
     def __repr__(self):
         keyvalstr = ', '.join(' == '.join((k, str(v)))
             for k, v in self.items()
             )
         return type(self).__name__ + '{' + keyvalstr + '}'
+    @property
+    def hashID(self):
+        return w_hash(repr(self))
+    @property
+    def id(self):
+        return self.hashID
 
 class DynamicState(State, Hosted):
 
