@@ -120,8 +120,8 @@ class Configurable(Stateful):
             super()._load(arg)
 
     def __setitem__(self, key, val):
-        if type(val) is tuple:
+        if type(key) is tuple:
             raise ValueError
-        if type(val) is slice:
+        if type(key) is slice:
             raise NotYetImplemented
         self.configs[key] = val

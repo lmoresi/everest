@@ -52,7 +52,7 @@ def _iterable_changed_state(func):
         return out
     return wrapper
 
-class Locality(State):
+class Station(State):
     def __init__(self, arg, *targs):
         self.proxy = arg.proxy if isinstance(arg, Frame) else arg
         self.target = targs[0] if len(targs) == 1 else targs
@@ -325,7 +325,7 @@ class Iterable(Stateful, Indexable, Prompter):
             raise ValueError
         if type(key) is slice:
             raise NotYetImplemented
-        return Locality(self, key)
+        return Station(self, key)
 
 # class Locality(State):
 #     def __init__(self, iterable, locale):
