@@ -96,6 +96,10 @@ class DynamicState(State, Hosted):
     def load(self, arg):
         return super(Stateful, self.host)._load(arg)
 
+    @property
+    def data(self):
+        return self.out()
+
 class Stateful(Observable, Producer):
 
     def __init__(self,

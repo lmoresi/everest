@@ -54,7 +54,6 @@ class ConfigsHost(MutableConfigs, Hosted):
                 for k in self.host._sortedGhostKeys[self.host._configsKey]
             )
         MutableConfigs.__init__(self, defaults)
-        self.configured = False
         self.stored = OrderedDict()
 
     def store(self):
@@ -67,9 +66,10 @@ class ConfigsHost(MutableConfigs, Hosted):
         if arg is None:
             arg = self.host.state
         super().apply(arg)
-        if arg is self.host.state:
-            self.host._configurable_changed_state_hook()
-            self.configured = True
+
+    def __setitem__(self, key, val):
+        super().__setitem__(key, val)
+        self.host._configurable_changed_state_hook()
 
 class Configurable(Stateful):
 
