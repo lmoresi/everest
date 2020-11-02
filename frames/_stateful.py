@@ -84,7 +84,7 @@ class DynamicState(State, Hosted):
     def out(self):
         return OrderedDict(zip(
             self.keys(),
-            (v.data for v in self.values())
+            (v.data.copy() for v in self.values())
             ))
     def save(self):
         return super(Stateful, self.host)._save()

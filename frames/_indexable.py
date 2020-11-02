@@ -71,6 +71,16 @@ class Indices(Mapping, Hosted):
         return self.info[self._get_metaIndex(arg)]
     def get_index(self, arg):
         return tuple(self.values())[self._get_metaIndex(arg)]
+    def get_now(self, op = None):
+        fn = Fn().get('indices').get[list(self.keys())[0]]
+        if self.isnull:
+            val = 0
+        else:
+            val = list(self.values())[0].value
+        if op is None:
+            return fn, val
+        else:
+            return Fn(fn, val).op(op)
     # def _process_index(self, arg):
     #     i, ik, it = self.get_indexInfo(arg)
     #     if arg < 0.:
@@ -187,11 +197,10 @@ class Indices(Mapping, Hosted):
     def __eq__(self, arg):
         return all(i == a for i, a in zip(self.values(), arg))
 
-    def __getitem__(self, key):
-        return dict(zip(
-            self.host._indexerKeys(),
-            self.host._indexers(),
-            ))[key]
+    def __getitem__(self, i):
+        if type(i) is str:
+            i = list(self.host._indexerKeys()).index(i)
+        return list(self.host._indexers())[i]
     def __len__(self):
         return len(tuple(self.host._indexerKeys()))
     def __iter__(self):
