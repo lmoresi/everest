@@ -5,12 +5,12 @@ from contextlib import contextmanager
 import numpy as np
 
 import funcy
+import wordhash
 
 from ._producer import Producer, Outs
 from ._observable import Observable
 from ._applier import Applier
 from ..hosted import Hosted
-from ..utilities import make_hash, w_hash, get_hash
 
 from ..exceptions import *
 class StatefulException(EverestException):
@@ -64,7 +64,7 @@ class State(Sequence, Mapping):
         return type(self).__name__ + '{' + keyvalstr + '}'
     @property
     def hashID(self):
-        return w_hash(repr(self))
+        return wordhash.w_hash(repr(self))
     @property
     def id(self):
         return self.hashID

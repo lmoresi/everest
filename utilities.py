@@ -2,10 +2,6 @@ import math
 import numbers
 import numpy as np
 
-import wordhash
-w_hash = wordhash.w_hash
-from frame.utilities import make_hash, get_hash
-
 def prettify_nbytes(size_bytes):
     if size_bytes == 0:
         return "0B"

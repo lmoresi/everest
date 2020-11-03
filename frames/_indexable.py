@@ -229,6 +229,10 @@ class Indexable(Producer):
             )
         super().__init__(**kwargs)
 
+    def _vector(self):
+        for pair in super()._vector(): yield pair
+        yield (self._countsKey, self._count)
+
     @property
     def indices(self):
         if self._indices is None:

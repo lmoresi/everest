@@ -13,7 +13,7 @@ import reseed
 
 from . import Frame
 from ..exceptions import *
-from ..utilities import prettify_nbytes, make_hash
+from ..utilities import prettify_nbytes
 
 class ProducerException(EverestException):
     pass
@@ -82,7 +82,7 @@ class Outs:
     def __delitem__(self, k):
         raise OutsKeysImmutable
     def store(self, silent = False):
-        hashVal = make_hash(self._data.values())
+        hashVal = wordhash.make_hash(self._data.values())
         if hashVal in self.hashVals:
             if not silent:
                 warnings.warn(

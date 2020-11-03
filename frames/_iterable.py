@@ -1,8 +1,10 @@
 from functools import wraps
 import numbers
 import warnings
+from collections import OrderedDict
 
 from funcy import Fn, convert, NullValueDetected
+from wordhash import w_hash
 
 from . import Frame
 from ._stateful import Stateful, State
@@ -52,60 +54,7 @@ def _iterable_changed_state(func):
         return out
     return wrapper
 
-class Station(State):
-    def __init__(self, arg, *targs):
-        self.proxy = arg.proxy if isinstance(arg, Frame) else arg
-        self.target = targs[0] if len(targs) == 1 else targs
-        self._targs = targs
-        self._data = None
-        self._computed = False
-        super().__init__()
-    @property
-    def frame(self):
-        try:
-            return self._frame
-        except AttributeError:
-            frame = self.proxy.realise(unique = True)
-            self._frame = frame
-            return frame
-    def compute(self):
-        frame = self.frame
-        if self._data is None:
-            master = self.proxy.realise()
-            if not master is None:
-                frame._outs = master._outs
-            frame.reach(*self._targs)
-            self._data = frame.out()
-            self._indices = tuple(
-                [*(v.value for v in frame.indices.values())]
-                )
-        else:
-            frame.load(self._data)
-        self._computed = True
-    def _compute_wrap(func):
-        @wraps(func)
-        def wrapper(self, *args, **kwargs):
-            if not self._computed:
-                self.compute()
-            return func(self, *args, **kwargs)
-        return wrapper
-    @property
-    @_compute_wrap
-    def data(self):
-        return self._data
-    @property
-    @_compute_wrap
-    def indices(self):
-        return self._indices
-    @property
-    @_compute_wrap
-    def _vars(self):
-        return self.frame.state.vars
-    def __repr__(self):
-        content = [repr(self.proxy), *(repr(t) for t in self._targs)]
-        return 'Locality(' + ', '.join(content) + ')'
-
-class Iterable(Stateful, Indexable, Prompter):
+class Iterable(Prompter, Indexable, Stateful):
 
     def __init__(self,
             **kwargs
@@ -327,56 +276,55 @@ class Iterable(Stateful, Indexable, Prompter):
             raise NotYetImplemented
         return Station(self, key)
 
-# class Locality(State):
-#     def __init__(self, iterable, locale):
-#         self.iterab
-
-#     def _process_get(self, arg):
-#         if isinstance(arg, slice):
-#             self._process_get_slice(arg)
-#         else:
-#             self._process_get_index(arg)
-#     def _process_get_slice(self, arg):
-#         *bounds, step = slicer.start, slicer.stop, slicer.step
-#         if not step is None:
-#             raise NotYetImplemented
-#         try:
-#             index = self.indices.values()[0].value
-#         except NullValueDetected:
-#             index = 0
-#         start, stop = bounds = (index if s is None else s for s in bounds)
-#         checkFn = self.indices._check_indexlike
-#         indexlikeStart, indexlikeStop = (checkFn(arg) for arg in bounds)
-#         raise NotYetImplemented
-#     def _process_get_index(self, arg):
-#         return
-#
-# class Locality(State):
-#     def __init__(self, system, index):
-#         if not isinstance(system, Iterator):
-#             raise TypeError
-#         self.system = system.copy()
-#         self.system._outs = system._outs
-#         self.index = index
-#     def _vars(self):
-#         self.system.goto(self.index)
-#
-
-# class SpecState(State):
-#     def __init__(self, traversable, slicer):
-#         self.start, self.stop = get_start_stop(traversable, slicer)
-#         self.indexlike = hasattr(self.stop, 'index')
-#         self._computed = False
-#         self.traversable = traversable.copy()
-#         self.traversable._outs = traversable._outs
-#         super().__init__()
-#     def _compute(self):
-#         assert not self._computed
-#         self.traversable.goto(self.start, self.stop)
-#         self._computed = True
-#     @property
-#     def _vars(self):
-#         return self._traversable_get_vars()
-#     @_spec_context_wrap
-#     def _traversable_get_vars(self):
-#         return self.traversable.state.vars
+class Station(State):
+    def __init__(self, arg, *targs):
+        self.proxy = arg.proxy if isinstance(arg, Frame) else arg
+        self.target = targs[0] if len(targs) == 1 else targs
+        self._targs = targs
+        self._data = None
+        self._computed = False
+        super().__init__()
+    @property
+    def frame(self):
+        try:
+            return self._frame
+        except AttributeError:
+            frame = self.proxy.realise(unique = True)
+            self._frame = frame
+            return frame
+    def compute(self):
+        frame = self.frame
+        if self._data is None:
+            master = self.proxy.realise()
+            if not master is None:
+                frame._outs = master._outs
+            frame.reach(*self._targs)
+            self._data = frame.out()
+            self._indices = tuple(
+                [*(v.value for v in frame.indices.values())]
+                )
+        else:
+            frame.load(self._data)
+        self._computed = True
+    def _compute_wrap(func):
+        @wraps(func)
+        def wrapper(self, *args, **kwargs):
+            if not self._computed:
+                self.compute()
+            return func(self, *args, **kwargs)
+        return wrapper
+    @property
+    @_compute_wrap
+    def data(self):
+        return self._data
+    @property
+    @_compute_wrap
+    def indices(self):
+        return self._indices
+    @property
+    @_compute_wrap
+    def _vars(self):
+        return self.frame.state.vars
+    def __repr__(self):
+        content = [repr(self.proxy), *(repr(t) for t in self._targs)]
+        return 'Locality(' + ', '.join(content) + ')'

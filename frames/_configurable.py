@@ -82,6 +82,10 @@ class Configurable(Stateful):
 
         super().__init__(**kwargs)
 
+    def _vector(self):
+        for pair in super()._vector(): yield pair
+        yield ('configs', list(self.configs.items()))
+
     @property
     def configs(self):
         if self._configs is None:

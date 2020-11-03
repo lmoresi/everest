@@ -13,6 +13,80 @@ class TraversableException(EverestException):
 class RedundantState(TraversableException):
     pass
 
+class Traversable(Iterable, Configurable):
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def _configurable_changed_state_hook(self):
+        super()._configurable_changed_state_hook()
+        self.indices.nullify()
+
+    def _initialise(self, *args, **kwargs):
+        self.configs.apply()
+        super()._initialise(*args, **kwargs)
+
+    @_iterable_initialise_if_necessary(post = True)
+    def _out(self, *args, **kwargs):
+        return super()._out(*args, **kwargs)
+
+# class Locality
+
+
+    # def _load(self, arg):
+    #     super()._load(arg)
+    #     if not self.indices.isnull:
+    #         self.configs.configured = False
+
+    # @_iterable_initialise_if_necessary(post = True)
+    # def go(self, arg1, arg2 = None):
+    #     if arg2 is None:
+    #         super().goto(arg1)
+    #     else:
+    #         start, stop = get_start_stop(self, (arg1, arg2))
+    #         self.configs[...] = start
+    #         super().goto(stop)
+
+    # def __getitem__(self, arg):
+    #     assert len(self.configs)
+    #     if len(self.configs) == 1:
+    #         return self._traversable_get_single(arg)
+    #     else:
+    #         return self._traversable_get_multi(arg)
+    # def _traversable_get_single(self, arg):
+    #     raise exceptions.NotYetImplemented
+    # def _traversable_get_multi(self, arg):
+    #     if type(arg) is str:
+    #         if not arg in self.configs:
+    #             raise ValueError
+    #         return self[:][arg]
+    #     else:
+    #         if not type(arg) is slice:
+    #             arg = slice(arg)
+    #         start, stop, step = arg.start, arg.stop, arg.step
+    #         try:
+    #             return WildConfigs.get_wild(self, arg)
+    #         except RedundantState:
+    #             return Configs(contents = self.configs)
+
+    # def _traversable_setitem__(self, key, val):
+    #     if isinstance(val, Traversable):
+    #         val = val[:]
+    #     if isinstance(val, WildConfigs):
+    #         if val.traversable.hashID == self.hashID:
+    #             if not val.start.id == self.configs.id:
+    #                 self.configs[...] = val.start
+    #             if not self.indices == val.indices:
+    #                 assert self.outputSubKey == val.data.name
+    #                 self.load(val.data)
+    #                 assert self.indices == val.indices
+    #             return
+    #         else:
+    #             val = val[:]
+    #     super().__setitem__(key, val)
+    #     return
+
+
 # def _spec_context_wrap(func):
 #     @wraps(func)
 #     def wrapper(specState, *args, **kwargs):
@@ -94,78 +168,3 @@ class RedundantState(TraversableException):
 #     assert isinstance(start, State)
 #     assert isinstance(stop, Function)
 #     return start, stop
-
-class Traversable(Iterable, Configurable):
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
-    @property
-    def locality(self):
-        return self.configs.hashID, tuple(i.value for i in self.indices)
-
-    def _configurable_changed_state_hook(self):
-        super()._configurable_changed_state_hook()
-        self.indices.nullify()
-
-    def _initialise(self, *args, **kwargs):
-        self.configs.apply()
-        super()._initialise(*args, **kwargs)
-        self.configs.configured = False
-
-    # @_iterable_initialise_if_necessary(post = True)
-    # def go(self, arg1, arg2 = None):
-    #     if arg2 is None:
-    #         super().goto(arg1)
-    #     else:
-    #         start, stop = get_start_stop(self, (arg1, arg2))
-    #         self.configs[...] = start
-    #         super().goto(stop)
-
-    @_iterable_initialise_if_necessary(post = True)
-    def _out(self, *args, **kwargs):
-        return super()._out(*args, **kwargs)
-
-    def _load(self, arg):
-        super()._load(arg)
-        if not self.indices.isnull:
-            self.configs.configured = False
-
-    # def __getitem__(self, arg):
-    #     assert len(self.configs)
-    #     if len(self.configs) == 1:
-    #         return self._traversable_get_single(arg)
-    #     else:
-    #         return self._traversable_get_multi(arg)
-    # def _traversable_get_single(self, arg):
-    #     raise exceptions.NotYetImplemented
-    # def _traversable_get_multi(self, arg):
-    #     if type(arg) is str:
-    #         if not arg in self.configs:
-    #             raise ValueError
-    #         return self[:][arg]
-    #     else:
-    #         if not type(arg) is slice:
-    #             arg = slice(arg)
-    #         start, stop, step = arg.start, arg.stop, arg.step
-    #         try:
-    #             return WildConfigs.get_wild(self, arg)
-    #         except RedundantState:
-    #             return Configs(contents = self.configs)
-
-    # def _traversable_setitem__(self, key, val):
-    #     if isinstance(val, Traversable):
-    #         val = val[:]
-    #     if isinstance(val, WildConfigs):
-    #         if val.traversable.hashID == self.hashID:
-    #             if not val.start.id == self.configs.id:
-    #                 self.configs[...] = val.start
-    #             if not self.indices == val.indices:
-    #                 assert self.outputSubKey == val.data.name
-    #                 self.load(val.data)
-    #                 assert self.indices == val.indices
-    #             return
-    #         else:
-    #             val = val[:]
-    #     super().__setitem__(key, val)
-    #     return
