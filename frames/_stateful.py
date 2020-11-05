@@ -1,6 +1,7 @@
 from collections import OrderedDict
 from collections.abc import Mapping, Sequence
 from contextlib import contextmanager
+import warnings
 
 import numpy as np
 
@@ -16,6 +17,8 @@ from ..exceptions import *
 class StatefulException(EverestException):
     pass
 class StatefulMissingAsset(MissingAsset, StatefulException):
+    pass
+class RedundantApplyState(StatefulException):
     pass
 
 class StateVar(funcy.FixedVariable):
@@ -47,15 +50,11 @@ class State(Sequence, Mapping):
         return iter(self.vars)
 
     def apply(self, state):
-        if not isinstance(state, State):
+        if not isinstance(state, MutableState):
             raise TypeError("States can only be applied to other States.")
         if not [*state.keys()] == [*self.keys()]:
             raise KeyError(state.keys(), self.keys())
-        self._apply(state)
-    def _apply(self, state):
-        for c, m in zip(self.values(), state.values()):
-            if not c is Ellipsis:
-                m.value = c
+        state.mutate(self)
 
     def __repr__(self):
         keyvalstr = ', '.join(' == '.join((k, str(v)))
@@ -69,7 +68,16 @@ class State(Sequence, Mapping):
     def id(self):
         return self.hashID
 
-class DynamicState(State, Hosted):
+class MutableState(State):
+    def mutate(self, mutator):
+        # if hasattr(mutator, 'frame'):
+        #     if mutator.frame is self.frame:
+        #         raise RedundantApplyState
+        for c, m in zip(mutator.values(), self.values()):
+            if not c is Ellipsis:
+                m.value = c
+
+class StateHost(MutableState, Hosted):
 
     def __init__(self, host):
         Hosted.__init__(self, host)
@@ -77,9 +85,16 @@ class DynamicState(State, Hosted):
     @property
     def _vars(self):
         return OrderedDict(zip(
-            tuple([*self.host._state_keys()][1:]),
-            tuple([*self.host._state_vars()][1:]),
+            tuple([*self.frame._state_keys()][1:]),
+            tuple([*self.frame._state_vars()][1:]),
             ))
+    def mutate(self, mutator):
+        if isinstance(mutator, StateHost):
+            warnings.warn(
+                "Attempting to set state from a mutable state - \
+                behaviour is not guaranteed."
+                )
+        super().mutate(mutator)
 
     def out(self):
         return OrderedDict(zip(
@@ -87,14 +102,14 @@ class DynamicState(State, Hosted):
             (v.data.copy() for v in self.values())
             ))
     def save(self):
-        return super(Stateful, self.host)._save()
+        return super(Stateful, self.frame)._save()
     def load_process(self, outs):
-        outs = super(Stateful, self.host)._load_process(outs)
+        outs = super(Stateful, self.frame)._load_process(outs)
         for k, v in self.items():
             v.value = outs.pop(k)
         return outs
-    def load(self, arg):
-        return super(Stateful, self.host)._load(arg)
+    # def load(self, arg, **kwargs):
+    #     return super(Stateful, self.frame)._load(arg, **kwargs)
 
     @property
     def data(self):
@@ -113,7 +128,7 @@ class Stateful(Observable, Producer):
     @property
     def state(self):
         if self._state is None:
-            self._state = DynamicState(self)
+            self._state = StateHost(self)
         return self._state
 
     def _state_vars(self):
@@ -133,5 +148,5 @@ class Stateful(Observable, Producer):
         return self.state.save()
     def _load_process(self, outs):
         return self.state.load_process(outs)
-    def _load(self, arg):
-        return self.state.load(arg)
+    # def _load(self, arg, **kwargs):
+    #     return self.state.load(arg, **kwargs)

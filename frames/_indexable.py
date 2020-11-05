@@ -9,6 +9,7 @@ from h5anchor.reader import PathNotInFrameError
 from h5anchor.anchor import NoActiveAnchorError
 from funcy import Fn
 from funcy import exceptions as funcyex
+import wordhash
 
 from ..utilities import make_scalar
 from ..hosted import Hosted
@@ -37,7 +38,11 @@ class Indices(Mapping, Hosted):
 
     @property
     def types(self):
-        return tuple(self.host._indexerTypes())
+        return tuple(self.frame._indexerTypes())
+
+    @property
+    def master(self):
+        return list(self.values())[0]
 
     @property
     def info(self):
@@ -76,7 +81,7 @@ class Indices(Mapping, Hosted):
         if self.isnull:
             val = 0
         else:
-            val = list(self.values())[0].value
+            val = self.master.value
         if op is None:
             return fn, val
         else:
@@ -109,12 +114,12 @@ class Indices(Mapping, Hosted):
     def disk(self):
         diskIndices = OrderedDict()
         for k in self.keys():
-            diskIndices[k] = list(self.host.readouts[k])
+            diskIndices[k] = list(self.frame.readouts[k])
         return diskIndices
     @property
     def stored(self):
         storedIndices = OrderedDict()
-        stored = dict(self.host.outs.zipstacked)
+        stored = dict(self.frame.outs.zipstacked)
         for k in self.keys():
             storedIndices[k] = list(stored[k])
         return storedIndices
@@ -144,17 +149,17 @@ class Indices(Mapping, Hosted):
     def drop_clashes(self):
         _, clashes = self._all(clashes = True)
         clashes = zip(*clashes.values())
-        stored = zip(*[self.host.outs.stored[k] for k in self.keys()])
+        stored = zip(*[self.frame.outs.stored[k] for k in self.keys()])
         toDrop = []
         # print(list(clashes))
         # print(list(stored))
         for i, row in enumerate(stored):
             if any(all(r == c for r, c in zip(row, crow)) for crow in clashes):
                 toDrop.append(i)
-        self.host.outs.drop(toDrop)
+        self.frame.outs.drop(toDrop)
 
     def out(self):
-        outs = super(Indexable, self.host)._out()
+        outs = super(Indexable, self.frame)._out()
         add = OrderedDict(zip(
             self.keys(),
             [OutsNull if i.null else i.value for i in self.values()]
@@ -164,10 +169,10 @@ class Indices(Mapping, Hosted):
 
     def save(self):
         self.drop_clashes()
-        return super(Indexable, self.host)._save()
+        return super(Indexable, self.frame)._save()
 
     def load_process(self, outs):
-        outs = super(Indexable, self.host)._load_process(outs)
+        outs = super(Indexable, self.frame)._load_process(outs)
         vals = [outs.pop(k) for k in self.keys()]
         if any([v is OutsNull for v in vals]):
             raise IndexableLoadNull
@@ -177,34 +182,36 @@ class Indices(Mapping, Hosted):
             i.value = val
         return outs
 
-    def load(self, arg):
+    def load(self, arg, **kwargs):
         if isinstance(arg, Fn) and hasattr(arg, 'index'):
             arg = arg.index
         try:
             i, ik, it = self.get_indexInfo(arg)
         except TypeError:
-            return super(Indexable, self.host)._load(arg)
+            return super(Indexable, self.frame)._load(arg, **kwargs)
         try:
-            ind = self.host.outs.index(**{ik: arg})
+            ind = self.frame.outs.index(**{ik: arg})
         except ValueError:
             try:
                 ind = self.disk[ik].index(arg)
             except (ValueError, NoActiveAnchorError, PathNotInFrameError):
                 raise IndexableLoadFail
-            return self.host._load_index_disk(ind)
-        return self.host._load_index_stored(ind)
+            return self.frame._load_index_disk(ind, **kwargs)
+        return self.frame._load_index_stored(ind, **kwargs)
 
     def __eq__(self, arg):
+        if isinstance(arg, type(self)):
+            arg = arg.values()
         return all(i == a for i, a in zip(self.values(), arg))
 
     def __getitem__(self, i):
         if type(i) is str:
-            i = list(self.host._indexerKeys()).index(i)
-        return list(self.host._indexers())[i]
+            i = list(self.frame._indexerKeys()).index(i)
+        return list(self.frame._indexers())[i]
     def __len__(self):
-        return len(tuple(self.host._indexerKeys()))
+        return len(tuple(self.frame._indexerKeys()))
     def __iter__(self):
-        return self.host._indexerKeys()
+        return self.frame._indexerKeys()
     def __setitem__(self, key, arg):
         self[key].value = arg
 
@@ -213,6 +220,9 @@ class Indices(Mapping, Hosted):
             for k, v in self.items()
             )
         return 'Indices{' + keyvalstr + '}'
+    @property
+    def hashID(self):
+        return wordhash.w_hash(repr(self))
 
 class Indexable(Producer):
 
@@ -231,7 +241,7 @@ class Indexable(Producer):
 
     def _vector(self):
         for pair in super()._vector(): yield pair
-        yield (self._countsKey, self._count)
+        yield ('count', self.indices)
 
     @property
     def indices(self):
@@ -252,5 +262,5 @@ class Indexable(Producer):
         return self.indices.save()
     def _load_process(self, outs):
         return self.indices.load_process(outs)
-    def _load(self, arg):
-        return self.indices.load(arg)
+    def _load(self, arg, **kwargs):
+        return self.indices.load(arg, **kwargs)

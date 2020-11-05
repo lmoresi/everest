@@ -7,7 +7,7 @@ class Hosted:
         super().__init__()
 
     @property
-    def host(self):
+    def frame(self):
         host = self._host()
         assert not host is None
         return host

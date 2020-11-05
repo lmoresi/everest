@@ -2,13 +2,15 @@ from functools import wraps
 import numbers
 import warnings
 from collections import OrderedDict
+from collections.abc import Iterable as abcIterable
+from collections.abc import Iterator as abcIterator
 
 from funcy import Fn, convert, NullValueDetected
 from wordhash import w_hash
 
 from . import Frame
 from ._stateful import Stateful, State
-from ._indexable import Indexable, NotIndexlike
+from ._indexable import Indexable, NotIndexlike, IndexableLoadFail
 from ._producer import LoadFail, _producer_update_outs
 from ._prompter import Prompter, _prompter_prompt_all
 
@@ -101,6 +103,7 @@ class Iterable(Prompter, Indexable, Stateful):
             raise IterableEnded
         return False
 
+    @_iterable_initialise_if_necessary(post = True)
     def iterate(self, silent = False):
         if not self._check_stop(silent):
             self._iterate()
@@ -122,6 +125,16 @@ class Iterable(Prompter, Indexable, Stateful):
             try: return strat(**kwargs)
             except BadStrategy: pass
         raise ExhaustedStrategies("Could not find a strategy to proceed.")
+    def _get_stop_fn(self, stop):
+        try:
+            index = self._try_index(stop)
+            return index >= stop
+        except BadStrategy: pass
+        try:
+            stop = self._try_convert(stop)
+            stop = stop.allclose(self)
+        except BadStrategy: pass
+        raise ExhaustedStrategies
 
     def reach(self, *args, **kwargs):
         if args:
@@ -260,71 +273,95 @@ class Iterable(Prompter, Indexable, Stateful):
     def _out(self):
         return super()._out()
     @_iterable_changed_state
-    def _load(self, arg):
-        if self.indices._check_indexlike(arg):
+    def _load(self, arg, **kwargs):
+        super()._load(arg, **kwargs)
+    def load(self, arg, process = True, **kwargs):
+        try:
+            return super().load(arg, process = process, **kwargs)
+        except IndexableLoadFail as e:
             if arg == 0:
-                try:
-                    return super()._load(arg)
-                except IndexableLoadFail:
-                    self.initialise(silent = True)
-        return super()._load(arg)
+                if not self.indices.iszero:
+                    self.initialise()
+                if not process:
+                    return self.out()
+            else:
+                raise e
 
     def __getitem__(self, key):
         if type(key) is tuple:
             raise ValueError
-        if type(key) is slice:
-            raise NotYetImplemented
-        return Station(self, key)
-
-class Station(State):
-    def __init__(self, arg, *targs):
-        self.proxy = arg.proxy if isinstance(arg, Frame) else arg
-        self.target = targs[0] if len(targs) == 1 else targs
-        self._targs = targs
-        self._data = None
-        self._computed = False
-        super().__init__()
-    @property
-    def frame(self):
-        try:
-            return self._frame
-        except AttributeError:
-            frame = self.proxy.realise(unique = True)
-            self._frame = frame
-            return frame
-    def compute(self):
-        frame = self.frame
-        if self._data is None:
-            master = self.proxy.realise()
-            if not master is None:
-                frame._outs = master._outs
-            frame.reach(*self._targs)
-            self._data = frame.out()
-            self._indices = tuple(
-                [*(v.value for v in frame.indices.values())]
-                )
+        elif type(key) is slice:
+            return Interval(self, key)
         else:
-            frame.load(self._data)
-        self._computed = True
+            return Stage(self, key)
+
+class SpecFrame:
+    def __init__(self, frame, targ, *targs):
+        self.frame = frame
+        if targ is None:
+            targ = self.frame.indices.master.value
+            self.index = targ
+        else:
+            self.index = None
+        self.targs = tuple([targ, *targs])
+        super().__init__()
+    def compute(self):
+        if self.index is None:
+            self.frame.reach(*self.targs, silent = True)
+            self.frame.store(silent = True)
+            self.index = self.frame.indices.master.value
+        else:
+            self.frame.reach(self.index, silent = True)
     def _compute_wrap(func):
         @wraps(func)
         def wrapper(self, *args, **kwargs):
-            if not self._computed:
-                self.compute()
+            self.compute()
             return func(self, *args, **kwargs)
         return wrapper
+
+class Stage(SpecFrame, State):
+    def __init__(self, arg, *targs):
+        super().__init__(arg, *targs)
     @property
-    @_compute_wrap
-    def data(self):
-        return self._data
-    @property
-    @_compute_wrap
-    def indices(self):
-        return self._indices
-    @property
-    @_compute_wrap
+    @SpecFrame._compute_wrap
     def _vars(self):
         return self.frame.state.vars
     def __repr__(self):
-        content = [repr(self.proxy), *(repr(t) for t in self._targs)]
-        return 'Locality(' + ', '.join(content) + ')'
+        content = [self.frame.hashID, *(repr(t) for t in self.targs)]
+        return type(self).__name__ + '(' + ', '.join(content) + ')'
+
+class Interval(abcIterable):
+    def __init__(self, frame, slicer):
+        self.frame, self.slicer = frame, slicer
+        super().__init__()
+    def __iter__(self):
+        return IntervalIterator(self.frame, self.slicer)
+    # def __getitem__(self, key):
+    #     raise Exception
+    def __repr__(self):
+        name = type(self).__name__
+        content = self.frame.hashID, self.slicer
+        return name + '(' + ', '.join(repr(o) for o in content) + ')'
+
+class IntervalIterator(SpecFrame, abcIterator):
+    def __init__(self, frame, slicer):
+        self.start, self.step = slicer.start, slicer.step
+        super().__init__(frame, self.start)
+        self.stop = self.frame._get_stop_fn(slicer.stop)
+        self.i = 0
+        self.compute()
+    def __next__(self):
+        if self.stop:
+            raise StopIteration
+        else:
+            self.frame.stride(self.step)
+            return self.frame[None]
+        #     print(repr(self.stop))
+        #     self.frame.stride(self.step)
+        #     self.i += 1
+        #     return self.frame.indices
+            # return Stage(
+            #     self.frame,
+            #     self.start,
+            #     *[self.step for i in range(self.i - 1)]
+            #     )

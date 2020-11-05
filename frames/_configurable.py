@@ -5,7 +5,7 @@ import numpy as np
 
 from funcy import Fn, convert
 
-from ._stateful import Stateful, State
+from ._stateful import Stateful, State, MutableState
 from ._configurator import Configurator
 from ..hosted import Hosted
 from ..utilities import ordered_unpack
@@ -27,7 +27,7 @@ class Configs(State):
                 v = float('nan')
             return convert(v)
 
-class MutableConfigs(Configs):
+class MutableConfigs(MutableState, Configs):
     def __init__(self, defaults):
         super().__init__(defaults)
         self.defaults = self.vars.copy()
@@ -50,8 +50,8 @@ class ConfigsHost(MutableConfigs, Hosted):
     def __init__(self, host):
         Hosted.__init__(self, host)
         defaults = OrderedDict(
-            (k, self.host.ghosts[k])
-                for k in self.host._sortedGhostKeys[self.host._configsKey]
+            (k, self.frame.ghosts[k])
+                for k in self.frame._sortedGhostKeys[self.frame._configsKey]
             )
         MutableConfigs.__init__(self, defaults)
         self.stored = OrderedDict()
@@ -64,12 +64,12 @@ class ConfigsHost(MutableConfigs, Hosted):
 
     def apply(self, arg = None):
         if arg is None:
-            arg = self.host.state
+            arg = self.frame.state
         super().apply(arg)
 
     def __setitem__(self, key, val):
         super().__setitem__(key, val)
-        self.host._configurable_changed_state_hook()
+        self.frame._configurable_changed_state_hook()
 
 class Configurable(Stateful):
 
@@ -84,7 +84,7 @@ class Configurable(Stateful):
 
     def _vector(self):
         for pair in super()._vector(): yield pair
-        yield ('configs', list(self.configs.items()))
+        yield ('configs', self.configs)
 
     @property
     def configs(self):
@@ -107,13 +107,14 @@ class Configurable(Stateful):
         super()._save()
         self.writeouts.add_dict({self._configsKey: self.configs.vars})
 
-    def _load(self, arg):
+    def _load(self, arg, **kwargs):
         if arg is None:
             self.configs.apply()
         elif type(arg) is str:
             try:
                 self.configs.load(arg)
             except KeyError:
+                # may be problematic
                 readpath = '/'.join([
                     self.outputMasterKey,
                     arg,
@@ -121,7 +122,7 @@ class Configurable(Stateful):
                     ])
                 self.configs[...] = self.reader[readpath]
         else:
-            super()._load(arg)
+            super()._load(arg, **kwargs)
 
     def __setitem__(self, key, val):
         if type(key) is tuple:

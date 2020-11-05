@@ -26,4 +26,4 @@ class Chronable(Indexable):
         yield self._chronsKey
     def _indexerTypes(self):
         for o in super()._indexerTypes(): yield o
-        yield (float, np.float)
+        yield numbers.Real

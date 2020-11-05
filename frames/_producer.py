@@ -157,11 +157,15 @@ class Outs:
 
 def _producer_load_wrapper(func):
     @wraps(func)
-    def wrapper(self, *args, **kwargs):
+    def wrapper(self, *args, process = False, **kwargs):
         loaded = func(self, *args, **kwargs)
-        leftovers = self._load_process(loaded)
-        if len(leftovers):
-            raise ProducerLoadFail(leftovers)
+        if process:
+            leftovers = self._load_process(loaded)
+            if len(leftovers):
+                raise ProducerLoadFail(leftovers)
+            return
+        else:
+            return loaded
     return wrapper
 
 def _producer_update_outs(func):
@@ -236,7 +240,9 @@ class Producer(Frame):
     def _out(self):
         return OrderedDict()
     def out(self):
-        return self._out()
+        outDict = self._out()
+        outDict.name = self.outputSubKey
+        return outDict
 
     def store(self, silent = False):
         self._store(silent = silent)
@@ -285,15 +291,19 @@ class Producer(Frame):
         return outs
     @_producer_load_wrapper
     def _load_raw(self, outs):
-        try:
-            outsKey = outs.name
-        except AttributeError:
-            outsKey = self._defaultOutputSubKey
-        if not outsKey == self.outputSubKey:
+        if not outs.name == self.outputSubKey:
             raise ProducerLoadFail(
-                "SubKeys misaligned:", (outsKey, self.outputSubKey)
+                "SubKeys misaligned:", (outs.name, self.outputSubKey)
                 )
         return {**outs}
+    # @_producer_load_wrapper
+    # def _load_siblings(self, arg):
+    #     for sibling in self.siblings:
+    #         try:
+    #             return sibling.load(arg, process = False)
+    #         except LoadFail:
+    #             pass
+    #     raise LoadFail
     @_producer_load_wrapper
     def _load_index_stored(self, index):
         return dict(zip(self.outs.keys(), self.outs.retrieve(index)))
@@ -301,24 +311,29 @@ class Producer(Frame):
     def _load_index_disk(self, index):
         ks = self.outs.keys()
         return dict(zip(ks, (self.readouts[k][index] for k in ks)))
-    def _load_index(self, index):
+    def _load_index(self, index, **kwargs):
         try:
-            return self._load_index_stored(index)
+            return self._load_index_stored(index, **kwargs)
         except IndexError:
-            return self._load_index_disk(index)
-    def _load(self, arg):
-        try:
-            return self._load_raw(arg)
-        except TypeError:
+            return self._load_index_disk(index, **kwargs)
+    def _load(self, arg, **kwargs):
+        if isinstance(arg, dict):
+            return self._load_raw(arg, **kwargs)
+        else:
             try:
-                return self._load_index(arg)
+                return self._load_index(arg, **kwargs)
             except IndexError:
                 raise ProducerLoadFail
             except TypeError:
                 raise LoadFail
-    def load(self, arg, silent = False):
-        fn = lambda: self._load(arg)
-        if silent:
-            try: return fn()
-            except LoadFail: pass
-        return fn()
+    def load(self, arg, silent = False, process = True, **kwargs):
+        try:
+            return self._load(arg, process = process, **kwargs)
+        except LoadFail as e:
+            # try:
+            #     return self._load_siblings(arg, **kwargs)
+            # except LoadFail:
+            if not silent:
+                raise e
+            else:
+                return
