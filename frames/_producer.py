@@ -17,7 +17,7 @@ from ..utilities import prettify_nbytes
 
 class ProducerException(EverestException):
     pass
-class ProducerNoOuts(ProducerException):
+class ProducerNoStorage(ProducerException):
     pass
 class ProducerIOError(ProducerException):
     pass
@@ -36,18 +36,18 @@ class AbortStore(ProducerException):
 # class ProducerMissingAsset(exceptions.MissingAsset):
 #     pass
 
-class OutsException(ProducerException):
+class StorageException(ProducerException):
     pass
-class OutsAlreadyStored(OutsException):
+class StorageAlreadyStored(StorageException):
     pass
-class OutsAlreadyCleared(OutsException):
+class StorageAlreadyCleared(StorageException):
     pass
-class NullValueDetected(OutsException):
+class NullValueDetected(StorageException):
     pass
 class OutsNull:
     pass
 
-class Outs:
+class Storage:
     def __init__(self, keys, name = 'default'):
         self._keys, self.name = keys, name
         self._data = OrderedDict([(k, OutsNull) for k in self._keys])
@@ -76,11 +76,11 @@ class Outs:
             self._data[k] = v
             setattr(self, k, v)
         else:
-            raise OutsKeysImmutable
+            raise StorageKeysImmutable
     def __getitem__(self, k):
         return self._data[k]
     def __delitem__(self, k):
-        raise OutsKeysImmutable
+        raise StorageKeysImmutable
     def store(self, silent = False):
         hashVal = wordhash.make_hash(self._data.values())
         if hashVal in self.hashVals:
@@ -189,7 +189,6 @@ class Producer(Frame):
         for key, val in sorted(baselines.items()):
             self.baselines[key] = AnchorArray(val, extendable = False)
 
-        self._outs = OrderedDict()
         self._randomstate = None
 
         super().__init__(baselines = self.baselines, **kwargs)
@@ -221,22 +220,28 @@ class Producer(Frame):
         return '/'.join([k for k in keys if len(k)])
 
     @property
-    def outs(self):
+    def storages(self):
+        if not hasattr(self.family, 'storages'):
+            self.family.storages = OrderedDict()
+        return self.family.storages
+    @property
+    def storage(self):
         sk = self.outputSubKey
-        if sk in self._outs:
-            outs = self._outs[sk]
-            if self.randomstate != outs.token:
-                outs.update(self.out())
-                outs.token = self.randomstate
+        storages = self.storages
+        if sk in self.storages:
+            storage = storages[sk]
+            if self.randomstate != storage.token:
+                storage.update(self.out())
+                storage.token = self.randomstate
         else:
             outsDict = self.out()
-            outs = Outs(outsDict.keys(), sk)
-            self._outs[sk] = outs
+            storage = Storage(outsDict.keys(), sk)
+            storages[sk] = storage
             try:
-                outs.update(outsDict)
+                storage.update(outsDict)
             except NullValueDetected:
                 pass
-        return outs
+        return storage
     def _out(self):
         return OrderedDict()
     def out(self):
@@ -247,14 +252,14 @@ class Producer(Frame):
     def store(self, silent = False):
         self._store(silent = silent)
     def _store(self, silent = False):
-        self.outs.store(silent = silent)
+        self.storage.store(silent = silent)
     def clear(self, silent = False):
         self._clear(silent = silent)
     def _clear(self, silent = False):
-        self.outs.clear(silent = silent)
+        self.storage.clear(silent = silent)
     @property
     def nbytes(self):
-        return sum([o.nbytes for o in self._outs.values()])
+        return sum([o.nbytes for o in self.storages.values()])
     @property
     def strnbytes(self):
         return prettify_nbytes(self.nbytes)
@@ -279,13 +284,13 @@ class Producer(Frame):
         if clear:
             self.clear(silent = True)
     def _save(self):
-        if not len(self.outs):
+        if not len(self.storage):
             raise ProducerNothingToSave
         self.writeouts.add(self, 'producer')
-        for key, val in self.outs.zipstacked:
+        for key, val in self.storage.zipstacked:
             wrapped = AnchorArray(val, extendable = True)
             self.writeouts.add(wrapped, key)
-        self.writeouts.add_dict(self.outs.collateral, 'collateral')
+        self.writeouts.add_dict(self.storage.collateral, 'collateral')
 
     def _load_process(self, outs):
         return outs
@@ -306,10 +311,10 @@ class Producer(Frame):
     #     raise LoadFail
     @_producer_load_wrapper
     def _load_index_stored(self, index):
-        return dict(zip(self.outs.keys(), self.outs.retrieve(index)))
+        return dict(zip(self.storage.keys(), self.storage.retrieve(index)))
     @_producer_load_wrapper
     def _load_index_disk(self, index):
-        ks = self.outs.keys()
+        ks = self.storage.keys()
         return dict(zip(ks, (self.readouts[k][index] for k in ks)))
     def _load_index(self, index, **kwargs):
         try:

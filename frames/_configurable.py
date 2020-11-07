@@ -25,9 +25,9 @@ class Configs(State):
         else:
             if v is None:
                 v = float('nan')
-            return convert(v)
+            return v
 
-class MutableConfigs(MutableState, Configs):
+class MutableConfigs(Configs):
     def __init__(self, defaults):
         super().__init__(defaults)
         self.defaults = self.vars.copy()
@@ -45,7 +45,7 @@ class MutableConfigs(MutableState, Configs):
         out.update(self.vars)
         return out
 
-class ConfigsHost(MutableConfigs, Hosted):
+class FrameConfigs(MutableConfigs, Hosted):
 
     def __init__(self, host):
         Hosted.__init__(self, host)
@@ -89,7 +89,7 @@ class Configurable(Stateful):
     @property
     def configs(self):
         if self._configs is None:
-            self._configs = ConfigsHost(self)
+            self._configs = FrameConfigs(self)
         return self._configs
 
     def _state_keys(self):

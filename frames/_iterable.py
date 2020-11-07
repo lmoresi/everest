@@ -4,6 +4,7 @@ import warnings
 from collections import OrderedDict
 from collections.abc import Iterable as abcIterable
 from collections.abc import Iterator as abcIterator
+import weakref
 
 from funcy import Fn, convert, NullValueDetected
 from wordhash import w_hash
@@ -103,10 +104,16 @@ class Iterable(Prompter, Indexable, Stateful):
             raise IterableEnded
         return False
 
+    # ITERATE
     @_iterable_initialise_if_necessary(post = True)
-    def iterate(self, silent = False):
-        if not self._check_stop(silent):
-            self._iterate()
+    def iterate(self, n = 1, silent = False):
+        if n > 1:
+            for _ in range(n):
+                if not self._check_stop(silent):
+                    self._iterate()
+        else:
+            if not self._check_stop(silent):
+                self._iterate()
     def _iterate(self):
         self.indices['count'] += 1
         self._iterable_changed_state_hook()
@@ -126,16 +133,18 @@ class Iterable(Prompter, Indexable, Stateful):
             except BadStrategy: pass
         raise ExhaustedStrategies("Could not find a strategy to proceed.")
     def _get_stop_fn(self, stop):
+        if stop is None:
+            raise ValueError(stop)
         try:
             index = self._try_index(stop)
             return index >= stop
         except BadStrategy: pass
         try:
-            stop = self._try_convert(stop)
-            stop = stop.allclose(self)
+            return self._try_convert(stop).allclose(self)
         except BadStrategy: pass
         raise ExhaustedStrategies
 
+    # REACH
     def reach(self, *args, **kwargs):
         if args:
             arg, *args = args
@@ -194,6 +203,7 @@ class Iterable(Prompter, Indexable, Stateful):
             while not closed:
                 self.iterate(**kwargs)
 
+    # STRIDE
     def stride(self, *args, **kwargs):
         if args:
             for arg in args:
@@ -209,7 +219,8 @@ class Iterable(Prompter, Indexable, Stateful):
     def _stride_index(self, stop, **kwargs):
         index = self._try_index(stop)
         stop = (index + stop).value
-        self._reach_index(stop, index = index, **kwargs)
+        while index < stop:
+            self.iterate(**kwargs)
     @_iterable_initialise_if_necessary(post = True)
     def _stride_fn(self, stop, **kwargs):
         stop = self._try_convert(stop)
@@ -222,6 +233,7 @@ class Iterable(Prompter, Indexable, Stateful):
             while not closed:
                 self.iterate(**kwargs)
 
+    # GO
     @_iterable_initialise_if_necessary(post = True)
     def go(self, *args, **kwargs):
         if args:
@@ -265,6 +277,7 @@ class Iterable(Prompter, Indexable, Stateful):
         while not stop:
             self.iterate(**kwargs)
 
+    # RUN
     @_iterable_initialise_if_necessary()
     def run(self, *args, **kwargs):
         self.go(*args, **kwargs)
@@ -296,46 +309,58 @@ class Iterable(Prompter, Indexable, Stateful):
             return Stage(self, key)
 
 class SpecFrame:
+    _preframes = weakref.WeakValueDictionary()
     def __init__(self, frame, targ, *targs):
-        self.frame = frame
+        self._frame = self._get_local_frame(frame)
         if targ is None:
-            targ = self.frame.indices.master.value
-            self.index = targ
+            targ = frame.indices.master.value
+            self._index = targ
         else:
-            self.index = None
+            self._index = None
         self.targs = tuple([targ, *targs])
         super().__init__()
+    @classmethod
+    def _get_local_frame(cls, frame):
+        return cls._preframes.setdefault(frame.hashID, frame.copy())
     def compute(self):
-        if self.index is None:
-            self.frame.reach(*self.targs, silent = True)
-            self.frame.store(silent = True)
-            self.index = self.frame.indices.master.value
+        if self._index is None:
+            self._frame.reach(*self.targs, silent = True)
+            self._index = self._frame.indices.master.value
         else:
-            self.frame.reach(self.index, silent = True)
+            self._frame.reach(self._index, silent = True)
+        self._frame.store(silent = True)
     def _compute_wrap(func):
         @wraps(func)
         def wrapper(self, *args, **kwargs):
             self.compute()
             return func(self, *args, **kwargs)
         return wrapper
+    @property
+    @_compute_wrap
+    def frame(self):
+        return self._frame
 
 class Stage(SpecFrame, State):
     def __init__(self, arg, *targs):
         super().__init__(arg, *targs)
     @property
-    @SpecFrame._compute_wrap
     def _vars(self):
         return self.frame.state.vars
     def __repr__(self):
-        content = [self.frame.hashID, *(repr(t) for t in self.targs)]
+        content = [self._frame.hashID, *(repr(t) for t in self.targs)]
         return type(self).__name__ + '(' + ', '.join(content) + ')'
 
 class Interval(abcIterable):
     def __init__(self, frame, slicer):
+        if not type(slicer) is slice:
+            slicer = slice(*slicer)
+        self.start, self.stop, self.step = \
+            slicer.start, slicer.stop, slicer.step
+        self.frame = SpecFrame._get_local_frame(frame)
         self.frame, self.slicer = frame, slicer
         super().__init__()
     def __iter__(self):
-        return IntervalIterator(self.frame, self.slicer)
+        return IntervalIterator(self.frame, self.start, self.stop, self.step)
     # def __getitem__(self, key):
     #     raise Exception
     def __repr__(self):
@@ -344,24 +369,19 @@ class Interval(abcIterable):
         return name + '(' + ', '.join(repr(o) for o in content) + ')'
 
 class IntervalIterator(SpecFrame, abcIterator):
-    def __init__(self, frame, slicer):
-        self.start, self.step = slicer.start, slicer.step
+    def __init__(self, frame, start, stop, step):
+        self.start = start
+        self.step = 1 if step is None else step
         super().__init__(frame, self.start)
-        self.stop = self.frame._get_stop_fn(slicer.stop)
+        self.stop = False if stop is None else self._frame._get_stop_fn(stop)
         self.i = 0
         self.compute()
+    def __iter__(self):
+        return self
     def __next__(self):
         if self.stop:
             raise StopIteration
         else:
-            self.frame.stride(self.step)
-            return self.frame[None]
-        #     print(repr(self.stop))
-        #     self.frame.stride(self.step)
-        #     self.i += 1
-        #     return self.frame.indices
-            # return Stage(
-            #     self.frame,
-            #     self.start,
-            #     *[self.step for i in range(self.i - 1)]
-            #     )
+            self._frame.stride(self.step)
+            self.i += 1
+            return self._frame[None]

@@ -31,7 +31,7 @@ class IndexableLoadRedundant(IndexableLoadFail):
 class NotIndexlike(TypeError, IndexableException):
     pass
 
-class Indices(Mapping, Hosted):
+class FrameIndices(Mapping, Hosted):
 
     def __init__(self, host):
         super().__init__(host)
@@ -119,7 +119,7 @@ class Indices(Mapping, Hosted):
     @property
     def stored(self):
         storedIndices = OrderedDict()
-        stored = dict(self.frame.outs.zipstacked)
+        stored = dict(self.frame.storage.zipstacked)
         for k in self.keys():
             storedIndices[k] = list(stored[k])
         return storedIndices
@@ -149,14 +149,14 @@ class Indices(Mapping, Hosted):
     def drop_clashes(self):
         _, clashes = self._all(clashes = True)
         clashes = zip(*clashes.values())
-        stored = zip(*[self.frame.outs.stored[k] for k in self.keys()])
+        stored = zip(*[self.frame.storage.stored[k] for k in self.keys()])
         toDrop = []
         # print(list(clashes))
         # print(list(stored))
         for i, row in enumerate(stored):
             if any(all(r == c for r, c in zip(row, crow)) for crow in clashes):
                 toDrop.append(i)
-        self.frame.outs.drop(toDrop)
+        self.frame.storage.drop(toDrop)
 
     def out(self):
         outs = super(Indexable, self.frame)._out()
@@ -190,7 +190,7 @@ class Indices(Mapping, Hosted):
         except TypeError:
             return super(Indexable, self.frame)._load(arg, **kwargs)
         try:
-            ind = self.frame.outs.index(**{ik: arg})
+            ind = self.frame.storage.index(**{ik: arg})
         except ValueError:
             try:
                 ind = self.disk[ik].index(arg)
@@ -216,10 +216,9 @@ class Indices(Mapping, Hosted):
         self[key].value = arg
 
     def __repr__(self):
-        keyvalstr = ', '.join('=='.join((k, str(v)))
-            for k, v in self.items()
-            )
-        return 'Indices{' + keyvalstr + '}'
+        rows = [k + ': ' + str(v.data) for k, v in self.items()]
+        keyvalstr = ',\n    '.join(rows)
+        return type(self).__name__ + '{\n    ' + keyvalstr + ',\n    }'
     @property
     def hashID(self):
         return wordhash.w_hash(repr(self))
@@ -246,7 +245,7 @@ class Indexable(Producer):
     @property
     def indices(self):
         if self._indices is None:
-            self._indices = Indices(self)
+            self._indices = FrameIndices(self)
         return self._indices
 
     def _indexers(self):

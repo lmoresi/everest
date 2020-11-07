@@ -4,10 +4,6 @@ import weakref
 from collections import OrderedDict
 from collections.abc import Mapping
 
-from grouper import Grouper
-
-from . import Frame
-from ._producer import Producer, Outs
 from ._observable import Observable
 from ._promptable import Promptable
 from ..freq import Freq

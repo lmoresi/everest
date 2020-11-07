@@ -8,7 +8,7 @@ import numpy as np
 import funcy
 import wordhash
 
-from ._producer import Producer, Outs
+from ._producer import Producer
 from ._observable import Observable
 from ._applier import Applier
 from ..hosted import Hosted
@@ -36,6 +36,7 @@ class State(Sequence, Mapping):
             return self._vars
         except AttributeError:
             raise MissingAsset(
+                self,
                 "Classes inheriting from State must provide _vars attribute."
                 )
 
@@ -57,10 +58,13 @@ class State(Sequence, Mapping):
         state.mutate(self)
 
     def __repr__(self):
-        keyvalstr = ', '.join(' == '.join((k, str(v)))
-            for k, v in self.items()
-            )
-        return type(self).__name__ + '{' + keyvalstr + '}'
+        rows = []
+        for k, v in self.items():
+            row = k + ': '
+            row += v.hashID if hasattr(v, 'hashID') else repr(v)
+            rows.append(row)
+        keyvalstr = ',\n    '.join(rows)
+        return type(self).__name__ + '{\n    ' + keyvalstr + ',\n    }'
     @property
     def hashID(self):
         return wordhash.w_hash(repr(self))
@@ -70,14 +74,19 @@ class State(Sequence, Mapping):
 
 class MutableState(State):
     def mutate(self, mutator):
-        # if hasattr(mutator, 'frame'):
-        #     if mutator.frame is self.frame:
-        #         raise RedundantApplyState
+        if isinstance(mutator, MutableState):
+            warnings.warn(
+                "Mutating from mutable state: behaviour may be unpredictable."
+                )
         for c, m in zip(mutator.values(), self.values()):
             if not c is Ellipsis:
                 m.value = c
+    def __repr__(self):
+        rows = (': '.join((k, v.valstr)) for k, v in self.items())
+        keyvalstr = ',\n    '.join(rows)
+        return type(self).__name__ + '{\n    ' + keyvalstr + ',\n    }'
 
-class StateHost(MutableState, Hosted):
+class FrameState(MutableState, Hosted):
 
     def __init__(self, host):
         Hosted.__init__(self, host)
@@ -89,7 +98,7 @@ class StateHost(MutableState, Hosted):
             tuple([*self.frame._state_vars()][1:]),
             ))
     def mutate(self, mutator):
-        if isinstance(mutator, StateHost):
+        if isinstance(mutator, FrameState):
             warnings.warn(
                 "Attempting to set state from a mutable state - \
                 behaviour is not guaranteed."
@@ -120,15 +129,13 @@ class Stateful(Observable, Producer):
     def __init__(self,
             **kwargs
             ):
-
         self._state = None
-
         super().__init__(**kwargs)
 
     @property
     def state(self):
         if self._state is None:
-            self._state = StateHost(self)
+            self._state = FrameState(self)
         return self._state
 
     def _state_vars(self):

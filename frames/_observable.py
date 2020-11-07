@@ -56,7 +56,7 @@ class Obs:
         if chosen is None:
             raise KeyError
         with chosen(self.host):
-            return self.host.outs[key]
+            return self.host.storage[key]
 
 class Observable(Producer):
 
