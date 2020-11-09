@@ -69,8 +69,8 @@ class Observable(Producer):
         self._observerClasses = WeakList()
         # self.observers = list()
         # self._observerClasses = list()
-        if 'observers' in self.ghosts:
-            for o in self.ghosts['observers']:
+        if 'observers' in dir(self.ghosts):
+            for o in self.ghosts.observers:
                 if isinstance(o, Observer):
                     self.observers.append(o)
                 elif type(o) is type(Observer):

@@ -8,7 +8,8 @@ import simpli as mpi
 from h5anchor import disk
 
 from ..exceptions import *
-from . import Frame, BuildProxy
+raise NotYetImplemented
+# from . import Frame, BuildProxy
 
 class Ticket:
     def __init__(self, obj, spice = 0, timestamp = None):

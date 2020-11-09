@@ -15,7 +15,9 @@ class RedundantState(TraversableException):
 
 class Traversable(Iterable, Configurable):
 
-    def __init__(self, **kwargs):
+    def __init__(self,
+            **kwargs
+            ):
         super().__init__(**kwargs)
 
     def _configurable_changed_state_hook(self):

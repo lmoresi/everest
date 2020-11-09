@@ -10,7 +10,9 @@ class Chronable(Indexable):
     _defaultChronsKey = 'chron'
     _defaultChronNullVal = float('nan')
 
-    def __init__(self, **kwargs):
+    def __init__(self,
+            **kwargs
+            ):
         self._chronsKey = self._defaultChronsKey
         self._chron = Function(
             np.float32,

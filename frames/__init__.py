@@ -5,4 +5,4 @@
 # funcy
 # h5anchor
 
-from frame import Schema, Frame, Proxy, FrameProxy, ClassProxy
+from frame import Schema, Frame, Case, casemethod

@@ -221,9 +221,9 @@ class Producer(Frame):
 
     @property
     def storages(self):
-        if not hasattr(self.family, 'storages'):
-            self.family.storages = OrderedDict()
-        return self.family.storages
+        if not hasattr(self.case, 'storages'):
+            self.case.storages = OrderedDict()
+        return self.case.storages
     @property
     def storage(self):
         sk = self.outputSubKey

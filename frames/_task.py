@@ -20,8 +20,7 @@ CalledProcessError = subprocess.CalledProcessError
 
 class Task(Boolean, Cycler):
 
-    def __init__(
-            self,
+    def __init__(self,
             _task_stop_metaFn = all,
             **kwargs
             ):

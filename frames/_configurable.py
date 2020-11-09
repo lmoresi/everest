@@ -12,7 +12,9 @@ from ..utilities import ordered_unpack
 from ..exceptions import *
 
 class Configs(State):
-    def __init__(self, contents):
+    def __init__(self,
+            contents
+            ):
         self._vars = OrderedDict(
             (k, self._process_config(v))
                 for k, v in contents.items()
@@ -49,10 +51,7 @@ class FrameConfigs(MutableConfigs, Hosted):
 
     def __init__(self, host):
         Hosted.__init__(self, host)
-        defaults = OrderedDict(
-            (k, self.frame.ghosts[k])
-                for k in self.frame._sortedGhostKeys[self.frame._configsKey]
-            )
+        defaults = OrderedDict(**self.frame.ghosts.configs)
         MutableConfigs.__init__(self, defaults)
         self.stored = OrderedDict()
 
@@ -75,7 +74,9 @@ class Configurable(Stateful):
 
     _defaultConfigsKey = 'configs'
 
-    def __init__(self, **kwargs):
+    def __init__(self,
+            **kwargs
+            ):
 
         self._configsKey = self._defaultConfigsKey
         self._configs = None
