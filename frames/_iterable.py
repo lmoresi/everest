@@ -9,7 +9,7 @@ import weakref
 from funcy import Fn, convert, NullValueDetected
 from wordhash import w_hash
 
-from . import Frame
+from . import Frame, casemethod
 from ._stateful import Stateful, State
 from ._indexable import Indexable, NotIndexlike, IndexableLoadFail
 from ._producer import LoadFail, _producer_update_outs
@@ -300,6 +300,7 @@ class Iterable(Prompter, Indexable, Stateful):
             else:
                 raise e
 
+    @casemethod
     def __getitem__(self, key):
         if type(key) is tuple:
             raise ValueError
@@ -310,8 +311,9 @@ class Iterable(Prompter, Indexable, Stateful):
 
 class SpecFrame:
     _preframes = weakref.WeakValueDictionary()
-    def __init__(self, frame, targ, *targs):
-        self._frame = self._get_local_frame(frame)
+    def __init__(self, case, targ, *targs):
+        self.case = case
+        self._frame = self._get_local_frame(case)
         if targ is None:
             targ = frame.indices.master.value
             self._index = targ
@@ -320,8 +322,8 @@ class SpecFrame:
         self.targs = tuple([targ, *targs])
         super().__init__()
     @classmethod
-    def _get_local_frame(cls, frame):
-        return cls._preframes.setdefault(frame.hashID, frame.copy())
+    def _get_local_frame(cls, case):
+        return cls._preframes.setdefault(case.hashID, case())
     def compute(self):
         if self._index is None:
             self._frame.reach(*self.targs, silent = True)
@@ -351,12 +353,12 @@ class Stage(SpecFrame, State):
         return type(self).__name__ + '(' + ', '.join(content) + ')'
 
 class Interval(abcIterable):
-    def __init__(self, frame, slicer):
+    def __init__(self, case, slicer):
         if not type(slicer) is slice:
             slicer = slice(*slicer)
         self.start, self.stop, self.step = \
             slicer.start, slicer.stop, slicer.step
-        self.frame = SpecFrame._get_local_frame(frame)
+        self.frame = SpecFrame._get_local_frame(case)
         self.frame, self.slicer = frame, slicer
         super().__init__()
     def __iter__(self):

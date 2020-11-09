@@ -22,8 +22,9 @@ class RedundantApplyState(StatefulException):
     pass
 
 class StateVar(funcy.FixedVariable):
-    def _set_value(self, val):
-        super()._set_value(val)
+    pass
+    # def _set_value(self, val):
+    #     super()._set_value(val)
 
 class State(Sequence, Mapping):
 

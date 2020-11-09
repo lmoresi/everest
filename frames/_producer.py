@@ -227,16 +227,15 @@ class Producer(Frame):
     @property
     def storage(self):
         sk = self.outputSubKey
-        storages = self.storages
         if sk in self.storages:
-            storage = storages[sk]
+            storage = self.storages[sk]
             if self.randomstate != storage.token:
                 storage.update(self.out())
                 storage.token = self.randomstate
         else:
             outsDict = self.out()
             storage = Storage(outsDict.keys(), sk)
-            storages[sk] = storage
+            self.storages[sk] = storage
             try:
                 storage.update(outsDict)
             except NullValueDetected:
