@@ -4,12 +4,12 @@ from functools import wraps
 from collections.abc import Mapping
 from collections import OrderedDict
 import warnings
+import time
 
 import wordhash
 from h5anchor import Reader, Writer, disk
 from h5anchor.array import AnchorArray
-from grouper import Grouper
-import reseed
+# import reseed
 
 from . import Frame
 from ..exceptions import *
@@ -47,113 +47,89 @@ class NullValueDetected(StorageException):
 class OutsNull:
     pass
 
-class Storage:
-    def __init__(self, keys, name = 'default'):
-        self._keys, self.name = keys, name
-        self._data = OrderedDict([(k, OutsNull) for k in self._keys])
-        self._collateral = OrderedDict()
-        self._data.name = name
-        self.stored = OrderedDict([(k, []) for k in self._keys])
-        self.hashVals = []
-        self.token = None
-    @property
-    def data(self):
-        if any([v is OutsNull for v in self._data.values()]):
-            raise NullValueDetected
-        else:
-            return self._data
-    @property
-    def collateral(self):
-        return self._collateral
-    def update(self, outs, silent = False):
-        if any([v is OutsNull for v in outs.values()]):
-            if not silent:
-                raise NullValueDetected
-        for k, v in outs.items():
-            self[k] = v
-    def __setitem__(self, k, v):
-        if k in self._keys:
-            self._data[k] = v
-            setattr(self, k, v)
-        else:
-            raise StorageKeysImmutable
-    def __getitem__(self, k):
-        return self._data[k]
-    def __delitem__(self, k):
-        raise StorageKeysImmutable
-    def store(self, silent = False):
-        hashVal = wordhash.make_hash(self._data.values())
-        if hashVal in self.hashVals:
-            if not silent:
-                warnings.warn(
-                    "This data was already saved - did you expect this?"
-                    )
-        else:
-            if any([v is OutsNull for v in self._data.values()]):
-                if silent:
-                    pass
-                else:
-                    raise NullValueDetected
-            else:
-                for k, v in self._data.items():
-                    self.stored[k].append(v)
-                self.hashVals.append(hashVal)
-    def sort(self, key = None):
-        if key is None:
-            key = self._keys[0]
-        sortInds = np.stack(self.stored[key]).argsort()
-        for k, v in self.zipstacked:
-            self.stored[k][:] = v[sortInds]
+def _get_data_properties(v):
+    if v is None: return float, ()
+    elif isinstance(v, np.ndarray): return v.dtype.type, v.shape
+    else: return type(v), ()
+
+class Storage(Mapping):
+    def __init__(self,
+            keys,
+            vals,
+            name = 'default',
+            blocklen = int(1e6)
+            ):
+        self.stored = OrderedDict()
+        self.keys = self.stored.keys
+        self.blocklen = blocklen
+        self.storedCount = 0
+    def store(self, outs):
+        for k, v in outs:
+            if not k is None:
+                try:
+                    self.stored[k][self.storedCount] = v
+                except KeyError:
+                    dtype, shape = _get_data_properties(v)
+                    self.stored[k] = np.empty((self.blocklen, *shape), dtype)
+                    self.stored[k][self.storedCount] = v
+                except IndexError:
+                    raise NotYetImplemented
+        self.storedCount += 1
+    def __len__(self):
+        return self.storedCount
+    def __getitem__(self, key):
+        return self.stored[key][:self.storedCount]
+    def __iter__(self):
+        return iter(self.keys())
     def clear(self, silent = False):
-        if not silent:
-            if not len(self.hashVals):
-                warnings.warn("No data was cleared - did you expect this?")
-        self.hashVals.clear()
-        for k, v in self.stored.items():
-            v.clear()
+        self.storedCount = 0
     def retrieve(self, index):
-        for v in self.stored.values():
-            yield v[index]
+        for k in self:
+            yield self[k][index]
+    def sort(self, key = None):
+        raise NotYetImplemented
+        # if not key is None:
+        #     # key = list(self.keys())[0]
+        #     raise NotYetImplemented
+        # sortInds = np.stack([self.values()][0]).argsort()
+        # for k, v in self.zipstacked:
+        #     self.stored[k][:] = v[sortInds]
     def pop(self, index):
-        _ = self.hashVals.pop(index)
-        for v in self.stored.values():
-            yield v.pop(index)
+        raise NotYetImplemented
+        # for v in self.stored.values():
+        #     yield v.pop(index)
     def drop(self, indices):
-        keep = [i for i in range(len(self)) if not i in indices]
-        self.hashVals[:] = [self.hashVals[i] for i in keep]
-        for v in self.stored.values():
-            v[:] = [v[i] for i in keep]
+        raise NotYetImplemented
+        # keep = [i for i in range(len(self)) if not i in indices]
+        # for v in self.stored.values():
+        #     v[:] = [v[i] for i in keep]
     def index(self, **kwargs):
-        search = lambda k, v: self.stored[k].index(v)
-        indices = [search(k, v) for k, v in sorted(kwargs.items())]
-        if len(set(indices)) != 1:
-            raise ValueError
-        return indices[0]
-    def keys(self):
-        return self._data.keys()
+        raise NotYetImplemented
+        # search = lambda k, v: self.stored[k].index(v)
+        # indices = [search(k, v) for k, v in sorted(kwargs.items())]
+        # if len(set(indices)) != 1:
+        #     raise ValueError
+        # return indices[0]
     @property
     def stacked(self):
-        if len(self):
-            for v in self.stored.values():
-                assert len(v)
-                yield np.stack(v)
-        else:
-            for v in self.stored:
-                yield []
+        raise NotYetImplemented
+        # if len(self):
+        #     for v in self.stored.values():
+        #         assert len(v)
+        #         yield np.stack(v)
+        # else:
+        #     for v in self.stored:
+        #         yield []
     @property
     def zipstacked(self):
-        return zip(self._keys, self.stacked)
+        raise NotYetImplemented
+        # return zip(self.keys(), self.stacked)
     @property
     def nbytes(self):
-        nbytes = np.array(self.hashVals).nbytes
-        for v in self.stored.values():
-            nbytes += np.array(v).nbytes
-        return nbytes
+        return sum(v.nbytes for v in self.values())
     @property
     def strnbytes(self):
         return prettify_nbytes(self.nbytes)
-    def __len__(self):
-        return len(self.hashVals)
 
 def _producer_load_wrapper(func):
     @wraps(func)
@@ -171,87 +147,80 @@ def _producer_load_wrapper(func):
 def _producer_update_outs(func):
     @wraps(func)
     def wrapper(self, *args, **kwargs):
-        toReturn = func(self, *args, **kwargs)
-        self._update_randomstate()
-        return toReturn
+        return func(self, *args, **kwargs)
+        # self._update_token()
+        # return toReturn
     return wrapper
 
 class Producer(Frame):
-
-    _defaultOutputSubKey = 'default'
 
     def __init__(self,
             baselines = dict(),
             **kwargs
             ):
 
-        self.baselines = dict()
-        for key, val in sorted(baselines.items()):
-            self.baselines[key] = AnchorArray(val, extendable = False)
+        self.outputKey = 'outputs'
 
-        self._randomstate = None
+        super().__init__(**kwargs)
 
-        super().__init__(baselines = self.baselines, **kwargs)
+        # self.baselines = dict()
+        # for key, val in sorted(baselines.items()):
+        #     self.baselines[key] = AnchorArray(val, extendable = False)
 
-        self._update_randomstate()
+        # super().__init__(baselines = self.baselines, **kwargs)
 
-    def _update_randomstate(self):
-        self._randomstate = reseed.randdigits(18)
-    @property
-    def randomstate(self):
-        return self._randomstate
 
-    @property
-    def outputMasterKey(self):
-        return '/'.join([k for k in self._outputMasterKey() if len(k)])
-    def _outputMasterKey(self):
-        yield 'outputs'
-    @property
-    def outputSubKey(self):
-        sk = '/'.join([k for k in self._outputSubKey() if len(k)])
-        if not len(sk):
-            sk = self._defaultOutputSubKey
-        return sk
-    def _outputSubKey(self):
-        yield ''
-    @property
-    def outputKey(self):
-        keys = [self.outputMasterKey, self.outputSubKey]
-        return '/'.join([k for k in keys if len(k)])
+    #     self._producer_token = 0
+    #
+    # def _update_token(self):
+    #     self._producer_token += 1
 
+    # @property
+    # def outputMasterKey(self):
+    #     return '/'.join([k for k in self._outputMasterKey() if len(k)])
+    # def _outputMasterKey(self):
+    #     yield 'outputs'
+    # @property
+    # def outputSubKey(self):
+    #     sk = '/'.join([k for k in self._outputSubKey() if len(k)])
+    #     if not len(sk):
+    #         sk = self._defaultOutputSubKey
+    #     return sk
+    # def _outputSubKey(self):
+    #     yield ''
+    # @property
+    # def outputKey(self):
+    #     keys = [self.outputMasterKey, self.outputSubKey]
+    #     return '/'.join([k for k in keys if len(k)])
+
+    def _out_keys(self):
+        yield None
+    def _out_vals(self):
+        yield None
+    def out(self):
+        for k, v in zip(self._out_keys(), self._out_vals()):
+            if not k is None:
+                yield k, v
     @property
     def storages(self):
-        if not hasattr(self.case, 'storages'):
+        try:
+            return self.case.storages
+        except AttributeError:
             self.case.storages = OrderedDict()
-        return self.case.storages
+            return self.case.storages
     @property
     def storage(self):
-        sk = self.outputSubKey
-        if sk in self.storages:
-            storage = self.storages[sk]
-            if self.randomstate != storage.token:
-                storage.update(self.out())
-                storage.token = self.randomstate
-        else:
-            outsDict = self.out()
-            storage = Storage(outsDict.keys(), sk)
-            self.storages[sk] = storage
-            try:
-                storage.update(outsDict)
-            except NullValueDetected:
-                pass
+        try:
+            storage = self.storages[self.outputKey]
+        except KeyError:
+            storage = Storage(self._out_keys(), self.outputKey)
+            self.storages[self.outputKey] = storage
         return storage
-    def _out(self):
-        return OrderedDict()
-    def out(self):
-        outDict = self._out()
-        outDict.name = self.outputSubKey
-        return outDict
 
     def store(self, silent = False):
         self._store(silent = silent)
     def _store(self, silent = False):
-        self.storage.store(silent = silent)
+        self.storage.store(self.out())
     def clear(self, silent = False):
         self._clear(silent = silent)
     def _clear(self, silent = False):
@@ -289,15 +258,15 @@ class Producer(Frame):
         for key, val in self.storage.zipstacked:
             wrapped = AnchorArray(val, extendable = True)
             self.writeouts.add(wrapped, key)
-        self.writeouts.add_dict(self.storage.collateral, 'collateral')
+        # self.writeouts.add_dict(self.storage.collateral, 'collateral')
 
     def _load_process(self, outs):
         return outs
     @_producer_load_wrapper
     def _load_raw(self, outs):
-        if not outs.name == self.outputSubKey:
+        if not outs.name == self.storage.name:
             raise ProducerLoadFail(
-                "SubKeys misaligned:", (outs.name, self.outputSubKey)
+                "SubKeys misaligned:", (outs.name, self.storage.name)
                 )
         return {**outs}
     # @_producer_load_wrapper

@@ -57,13 +57,14 @@ def _iterable_changed_state(func):
         return out
     return wrapper
 
-class Iterable(Prompter, Indexable, Stateful):
+class Iterable(Prompter, Stateful, Indexable):
 
     def __init__(self,
             **kwargs
             ):
 
         self.baselines = dict()
+        self.stopCount = None
 
         super().__init__(**kwargs)
 
@@ -92,31 +93,16 @@ class Iterable(Prompter, Indexable, Stateful):
     def _iterable_changed_state_hook(self):
         pass
 
-    @property
-    def stop(self):
-        return self._stop()
-    def _stop(self):
-        return False
-    def _check_stop(self, silent = False):
-        if self.stop:
-            if silent:
-                return True
-            raise IterableEnded
-        return False
-
     # ITERATE
-    @_iterable_initialise_if_necessary(post = True)
-    def iterate(self, n = 1, silent = False):
-        if n > 1:
-            for _ in range(n):
-                if not self._check_stop(silent):
-                    self._iterate()
-        else:
-            if not self._check_stop(silent):
-                self._iterate()
-    def _iterate(self):
-        self.indices['count'] += 1
+    def iterate(self):
+        try:
+            self._iterate()
+        except NullValueDetected:
+            self.initialise()
+            self._iterate()
         self._iterable_changed_state_hook()
+    def _iterate(self):
+        self.master += 1
 
     def _try_load(self, stop, silent = False):
         try: self.load(stop)
@@ -163,24 +149,26 @@ class Iterable(Prompter, Indexable, Stateful):
             self._reach_fn
             )
         self._try_strats(*strats, stop = stop, **kwargs)
-    def _reach_end(self, stop = IterableEnded, silent = True, **kwargs):
-        if not type(stop) is type:
+    def _reach_end(self, stop = IterableEnded, **kwargs):
+        try:
+            if not issubclass(stop, StopIteration):
+                raise BadStrategy
+        except TypeError:
             raise BadStrategy
-        if not issubclass(stop, StopIteration):
-            raise BadStrategy
-        stored = self.indices.stored[self.indices[0].name]
+        if self.indices.master == self.stopCount: return None
+        stored = self.indices.stored[self.indices.master.name]
         if stored:
             i = max(stored)
-            if i != self.indices[0]:
+            if i != self.indices.master:
                 self.load(i)
-        self.go(silent = silent, **kwargs)
+        if self.indices.master == self.stopCount: return None
+        self.go(**kwargs)
     @_iterable_initialise_if_necessary(post = True)
-    def _reach_index(self, stop, index = None, silent = False):
+    def _reach_index(self, stop, index = None):
         if index is None:
             index = self._try_index(stop)
         if index == stop:
-            if silent: return
-            else: raise RedundantIterate
+            raise StopIteration
         stored = self.indices.stored[index.name]
         try: latest = sorted(i for i in stored if i < index)[-1]
         except IndexError: latest = None
@@ -191,7 +179,7 @@ class Iterable(Prompter, Indexable, Stateful):
                 self.reset()
         stop = index >= stop
         while not stop:
-            self.iterate(silent = silent)
+            self.iterate()
     @_iterable_initialise_if_necessary(post = True)
     def _reach_fn(self, stop, **kwargs):
         stop = self._try_convert(stop)
@@ -251,17 +239,12 @@ class Iterable(Prompter, Indexable, Stateful):
         else:
             strats = (self._go_index, self._go_fn)
             self._try_strats(*strats, stop = stop, **kwargs)
-    def _go_indefinite(self, silent = True):
-        if not silent:
-            warnings.warn("Running indefinitely - did you intend this?")
-        while True:
-            try:
+    def _go_indefinite(self):
+        try:
+            while True:
                 self.iterate()
-            except IterableEnded:
-                if silent:
-                    return
-                else:
-                    raise IterableEnded
+        except StopIteration:
+            pass
     def _go_integral(self, stop, **kwargs):
         for _ in range(stop):
             self.iterate(**kwargs)
@@ -326,10 +309,10 @@ class SpecFrame:
         return cls._preframes.setdefault(case.hashID, case())
     def compute(self):
         if self._index is None:
-            self._frame.reach(*self.targs, silent = True)
+            self._frame.reach(*self.targs)
             self._index = self._frame.indices.master.value
         else:
-            self._frame.reach(self._index, silent = True)
+            self._frame.reach(self._index)
         self._frame.store(silent = True)
     def _compute_wrap(func):
         @wraps(func)

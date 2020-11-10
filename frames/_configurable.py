@@ -3,9 +3,7 @@ from collections import OrderedDict
 
 import numpy as np
 
-from funcy import Fn, convert
-
-from ._stateful import Stateful, State, MutableState
+from ._stateful import Stateful, State, DynamicState, MutableState, StateVar
 from ._configurator import Configurator
 from ..hosted import Hosted
 from ..utilities import ordered_unpack
@@ -29,7 +27,7 @@ class Configs(State):
                 v = float('nan')
             return v
 
-class MutableConfigs(Configs):
+class MutableConfigs(MutableState, Configs):
     def __init__(self, defaults):
         super().__init__(defaults)
         self.defaults = self.vars.copy()
@@ -37,7 +35,8 @@ class MutableConfigs(Configs):
         for k, v in ordered_unpack(self.keys(), arg1, arg2).items():
             if not k in self.keys():
                 raise KeyError("Key not in configs: ", k)
-            self.vars[k] = convert(self.defaults[k] if v is None else v)
+            v = self.defaults[k] if v is None else self._process_config(v)
+            super().__setitem__(k, v)
     def clear(self):
         self.update(self.defaults)
     def update(self, arg):
@@ -54,6 +53,15 @@ class FrameConfigs(MutableConfigs, Hosted):
         defaults = OrderedDict(**self.frame.ghosts.configs)
         MutableConfigs.__init__(self, defaults)
         self.stored = OrderedDict()
+        self.stateVars = [self._process_default(k, v) for k, v in self.items()]
+    @staticmethod
+    def _process_default(k, v):
+        if isinstance(v, StateVar):
+            return v
+        elif type(v) is tuple:
+            return v[0](v[1], name = k)
+        else:
+            return StateVar(v, name = k)
 
     def store(self):
         k, v = self.id, Configs(contents = self.vars)
@@ -77,32 +85,28 @@ class Configurable(Stateful):
     def __init__(self,
             **kwargs
             ):
-
         self._configsKey = self._defaultConfigsKey
-        self._configs = None
-
+        self.configs = FrameConfigs(self)
         super().__init__(**kwargs)
 
     def _vector(self):
         for pair in super()._vector(): yield pair
         yield ('configs', self.configs)
 
-    @property
-    def configs(self):
-        if self._configs is None:
-            self._configs = FrameConfigs(self)
-        return self._configs
-
     def _state_keys(self):
         for k in super()._state_keys(): yield k
         for k in self.configs.keys(): yield k
 
-    def _configurable_changed_state_hook(self):
-        pass
+    def _state_vars(self):
+        for v in super()._state_vars(): yield v
+        for v in self.configs.stateVars: yield v
 
-    def _outputSubKey(self):
-        yield self.configs.hashID
-        for o in super()._outputSubKey(): yield o
+    def _configurable_changed_state_hook(self):
+        self.outputKey = 'outputs/' + self.configs.hashID
+
+    # def _outputSubKey(self):
+    #     yield self.configs.hashID
+    #     for o in super()._outputSubKey(): yield o
 
     def _save(self):
         super()._save()

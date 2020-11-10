@@ -5,7 +5,7 @@ import warnings
 
 import numpy as np
 
-import funcy
+from funcy import MutableVariable
 import wordhash
 
 from ._producer import Producer
@@ -21,7 +21,7 @@ class StatefulMissingAsset(MissingAsset, StatefulException):
 class RedundantApplyState(StatefulException):
     pass
 
-class StateVar(funcy.FixedVariable):
+class StateVar(MutableVariable):
     pass
     # def _set_value(self, val):
     #     super()._set_value(val)
@@ -52,7 +52,7 @@ class State(Sequence, Mapping):
         return iter(self.vars)
 
     def apply(self, state):
-        if not isinstance(state, MutableState):
+        if not isinstance(state, DynamicState):
             raise TypeError("States can only be applied to other States.")
         if not [*state.keys()] == [*self.keys()]:
             raise KeyError(state.keys(), self.keys())
@@ -74,8 +74,12 @@ class State(Sequence, Mapping):
         return self.hashID
 
 class MutableState(State):
+    def __setitem__(self, key, val):
+        self.vars[key] = val
+
+class DynamicState(State):
     def mutate(self, mutator):
-        if isinstance(mutator, MutableState):
+        if isinstance(mutator, DynamicState):
             warnings.warn(
                 "Mutating from mutable state: behaviour may be unpredictable."
                 )
@@ -87,7 +91,7 @@ class MutableState(State):
         keyvalstr = ',\n    '.join(rows)
         return type(self).__name__ + '{\n    ' + keyvalstr + ',\n    }'
 
-class FrameState(MutableState, Hosted):
+class FrameState(DynamicState, Hosted):
 
     def __init__(self, host):
         Hosted.__init__(self, host)
@@ -106,13 +110,13 @@ class FrameState(MutableState, Hosted):
                 )
         super().mutate(mutator)
 
-    def out(self):
-        return OrderedDict(zip(
-            self.keys(),
-            (v.data.copy() for v in self.values())
-            ))
-    def save(self):
-        return super(Stateful, self.frame)._save()
+    # def out(self):
+    #     return OrderedDict(zip(
+    #         self.keys(),
+    #         (v.out() for v in self.values()),
+    #         ))
+    # def save(self):
+    #     return super(Stateful, self.frame)._save()
     def load_process(self, outs):
         outs = super(Stateful, self.frame)._load_process(outs)
         for k, v in self.items():
@@ -130,28 +134,29 @@ class Stateful(Observable, Producer):
     def __init__(self,
             **kwargs
             ):
-        self._state = None
+        self.state = FrameState(self)
         super().__init__(**kwargs)
 
-    @property
-    def state(self):
-        if self._state is None:
-            self._state = FrameState(self)
-        return self._state
-
-    def _state_vars(self):
-        yield None
     def _state_keys(self):
         yield None
+    def _state_vars(self):
+        yield None
 
-    def _out(self):
-        outs = super()._out()
-        if self._observationMode:
-            add = {}
-        else:
-            add = self.state.out()
-        outs.update(add)
-        return outs
+    def _out_keys(self):
+        for k in super()._out_keys(): yield k
+        for k in self._state_keys(): yield k
+    def _out_vals(self):
+        for v in super()._out_vals(): yield v
+        for v in self._state_vars(): yield v.data if not v is None else None
+    # def _out(self):
+    #     outs = super()._out()
+    #     if self._observationMode:
+    #         add = {}
+    #     else:
+    #         add = self.state.out()
+    #     outs.update(add)
+    #     return outs
+
     def _save(self):
         return self.state.save()
     def _load_process(self, outs):

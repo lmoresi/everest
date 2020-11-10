@@ -84,13 +84,13 @@ class Observable(Producer):
     def _observation_mode_hook(self):
         pass
 
-    def _outputSubKey(self):
-        for o in super()._outputSubKey():
-            yield o
-        try:
-            yield self.observer.hashID
-        except NoObserver:
-            yield ''
+    # def _outputSubKey(self):
+    #     for o in super()._outputSubKey():
+    #         yield o
+    #     try:
+    #         yield self.observer.hashID
+    #     except NoObserver:
+    #         yield ''
 
     @property
     def _observationMode(self):

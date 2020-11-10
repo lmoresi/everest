@@ -42,7 +42,7 @@ class FrameIndices(Mapping, Hosted):
 
     @property
     def master(self):
-        return list(self.values())[0]
+        return self.frame.master
 
     @property
     def info(self):
@@ -158,14 +158,14 @@ class FrameIndices(Mapping, Hosted):
                 toDrop.append(i)
         self.frame.storage.drop(toDrop)
 
-    def out(self):
-        outs = super(Indexable, self.frame)._out()
-        add = OrderedDict(zip(
-            self.keys(),
-            [OutsNull if i.null else i.value for i in self.values()]
-            ))
-        outs.update(add)
-        return outs
+    # def out(self):
+    #     outs = super(Indexable, self.frame)._out()
+    #     add = OrderedDict(zip(
+    #         self.keys(),
+    #         [OutsNull if i.null else i.value for i in self.values()]
+    #         ))
+    #     outs.update(add)
+    #     return outs
 
     def save(self):
         self.drop_clashes()
@@ -232,7 +232,7 @@ class Indexable(Producer):
             ):
         self._indices = None
         self._countsKey = self._defaultCountsKey
-        self._count = Fn(
+        self.master = Fn(
             np.int32,
             name = self._countsKey,
             )
@@ -249,14 +249,18 @@ class Indexable(Producer):
         return self._indices
 
     def _indexers(self):
-        yield self._count
+        yield self.master
     def _indexerKeys(self):
         yield self._countsKey
     def _indexerTypes(self):
         yield numbers.Integral
 
-    def _out(self):
-        return self.indices.out()
+    def _out_keys(self):
+        for k in super()._out_keys(): yield k
+        for k in self._indexerKeys(): yield k
+    def _out_vals(self):
+        for v in super()._out_vals(): yield v
+        for v in self._indexers(): yield v.data
     def _save(self):
         return self.indices.save()
     def _load_process(self, outs):

@@ -1,37 +1,53 @@
 from everest.frames._traversable import Traversable
-from everest.frames._stateful import StateVar
+
+
 
 class Lorenz(Traversable):
 
     def __init__(self,
-            # _configs
-                x = 0.,
-                y = 0.,
-                z = 0.,
             # params
                 s = 10,
                 r = 28,
                 b = 2.667,
+                dt = 0.01,
+            # _configs
+                x = 0.,
+                y = 1.,
+                z = 1.05,
             **kwargs
             ):
 
         super().__init__(**kwargs)
 
-        self._stateVars = [
-            StateVar(x, name = 'x'),
-            StateVar(y, name = 'y'),
-            StateVar(z, name = 'z'),
-            ]
-
-    def _state_vars(self):
-        for o in super()._state_vars(): yield o
-        for v in self._stateVars: yield v
+        x, y, z = self.state.values()
+        def lorenz():
+            xi, yi, zi = x.data, y.data, z.data
+            return (
+                s*(yi - xi),
+                r*xi - yi - xi*zi,
+                xi*yi - b*zi,
+                )
+        def _integrate():
+            for v, dot in zip(
+                    (x, y, z),
+                    lorenz()
+                    ):
+                v.data += dot * dt
+        self._integrate = _integrate
 
     def _iterate(self, **kwargs):
-        x, y, z = self.state.values()
-        s, r, b = self.inputs.params.values()
-        x_dot = (y - x) * s
-        y_dot = x * r - y - x * z
-        z_dot = x * y - z * b
-        x.value, y.value, z.value = x_dot, y_dot, z_dot
+        self._integrate()
         super()._iterate(**kwargs)
+
+    # def _iterate(self, **kwargs):
+    #     coords = self.state.values()
+    #     newcoords = lorenz(coords, *self.inputs.params.values())
+    #     for c, nc in zip(coords, newcoords):
+    #         c.value = nc
+
+        # x, y, z = self.state.values()
+        # self._iterFns = [
+        #     ((y - x) * s) * dt,
+        #     (x * r - y - x * z) * dt,
+        #     (x * y - z * b) * dt,
+        #     ]
