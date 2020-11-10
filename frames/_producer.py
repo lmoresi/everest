@@ -56,13 +56,24 @@ class Storage(Mapping):
     def __init__(self,
             keys,
             vals,
+            types,
             name = 'default',
             blocklen = int(1e6)
             ):
-        self.stored = OrderedDict()
+        storedList = list()
+        filteredkeys = list()
+        for k, v, t in zip(keys, vals, types):
+            if not t is None:
+                shape = v.shape if isinstance(v, np.ndarray) else ()
+                storedList.append(np.empty((blocklen, *shape), t))
+                filteredkeys.append(k)
+        self.storedList = storedList
+        self.stored = OrderedDict(zip(filteredkeys, self.storedList))
         self.keys = self.stored.keys
+        self.masterKey = list(self.keys())[0]
         self.blocklen = blocklen
         self.storedCount = 0
+        self.name = name
     def store(self, outs):
         for k, v in outs:
             if not k is None:
@@ -78,52 +89,43 @@ class Storage(Mapping):
     def __len__(self):
         return self.storedCount
     def __getitem__(self, key):
-        return self.stored[key][:self.storedCount]
+        try:
+            return self.stored[key][:self.storedCount]
+        except KeyError:
+            return self.storedList[key][:self.storedCount]
     def __iter__(self):
-        return iter(self.keys())
+        return iter(self.stored)
     def clear(self, silent = False):
         self.storedCount = 0
     def retrieve(self, index):
         for k in self:
-            yield self[k][index]
-    def sort(self, key = None):
-        raise NotYetImplemented
-        # if not key is None:
-        #     # key = list(self.keys())[0]
-        #     raise NotYetImplemented
-        # sortInds = np.stack([self.values()][0]).argsort()
-        # for k, v in self.zipstacked:
-        #     self.stored[k][:] = v[sortInds]
+            yield k, self[k][index]
+    def winnow(self, indices, invert = False):
+        if invert:
+            allIndices = np.arange(self.storedCount)
+            indices = allIndices[~np.in1d(allIndices, indices)]
+        length = len(indices)
+        for key in self:
+            subData = self[key]
+            subData[:length] = subData[indices]
+        self.storedCount = length
+    def drop_duplicates(self, key = 0):
+        self.winnow(np.unique(self[key], return_index = True)[1])
+    def sort(self, key = 0):
+        self.winnow(np.argsort(self[key]))
+    def tidy(self):
+        self.drop_duplicates()
+        self.sort()
     def pop(self, index):
-        raise NotYetImplemented
-        # for v in self.stored.values():
-        #     yield v.pop(index)
-    def drop(self, indices):
-        raise NotYetImplemented
-        # keep = [i for i in range(len(self)) if not i in indices]
-        # for v in self.stored.values():
-        #     v[:] = [v[i] for i in keep]
-    def index(self, **kwargs):
-        raise NotYetImplemented
-        # search = lambda k, v: self.stored[k].index(v)
-        # indices = [search(k, v) for k, v in sorted(kwargs.items())]
-        # if len(set(indices)) != 1:
-        #     raise ValueError
-        # return indices[0]
-    @property
-    def stacked(self):
-        raise NotYetImplemented
-        # if len(self):
-        #     for v in self.stored.values():
-        #         assert len(v)
-        #         yield np.stack(v)
-        # else:
-        #     for v in self.stored:
-        #         yield []
-    @property
-    def zipstacked(self):
-        raise NotYetImplemented
-        # return zip(self.keys(), self.stacked)
+        toReturn = self.retrieve(index)
+    def drop(self, index):
+        indices = np.concatenate([
+            np.arange(index),
+            np.arange(index + 1, self.storedCount)
+            ])
+        self.winnow(indices)
+    def index(self, val, key = 0):
+        return np.argwhere(self[key] == val)[0][0]
     @property
     def nbytes(self):
         return sum(v.nbytes for v in self.values())
@@ -197,6 +199,8 @@ class Producer(Frame):
         yield None
     def _out_vals(self):
         yield None
+    def _out_types(self):
+        yield None
     def out(self):
         for k, v in zip(self._out_keys(), self._out_vals()):
             if not k is None:
@@ -213,7 +217,12 @@ class Producer(Frame):
         try:
             storage = self.storages[self.outputKey]
         except KeyError:
-            storage = Storage(self._out_keys(), self.outputKey)
+            storage = Storage(
+                self._out_keys(),
+                self._out_vals(),
+                self._out_types(),
+                self.outputKey
+                )
             self.storages[self.outputKey] = storage
         return storage
 
@@ -255,7 +264,7 @@ class Producer(Frame):
         if not len(self.storage):
             raise ProducerNothingToSave
         self.writeouts.add(self, 'producer')
-        for key, val in self.storage.zipstacked:
+        for key, val in self.storage.items():
             wrapped = AnchorArray(val, extendable = True)
             self.writeouts.add(wrapped, key)
         # self.writeouts.add_dict(self.storage.collateral, 'collateral')
@@ -279,7 +288,7 @@ class Producer(Frame):
     #     raise LoadFail
     @_producer_load_wrapper
     def _load_index_stored(self, index):
-        return dict(zip(self.storage.keys(), self.storage.retrieve(index)))
+        return OrderedDict(self.storage.retrieve(index))
     @_producer_load_wrapper
     def _load_index_disk(self, index):
         ks = self.storage.keys()

@@ -68,6 +68,8 @@ class Iterable(Prompter, Stateful, Indexable):
 
         super().__init__(**kwargs)
 
+        self._iterCount = self.indices[0]
+
     def initialise(self, silent = False):
         if self.initialised:
             if silent:
@@ -102,7 +104,7 @@ class Iterable(Prompter, Stateful, Indexable):
             self._iterate()
         self._iterable_changed_state_hook()
     def _iterate(self):
-        self.master += 1
+        self._iterCount += 1
 
     def _try_load(self, stop, silent = False):
         try: self.load(stop)
@@ -155,13 +157,13 @@ class Iterable(Prompter, Stateful, Indexable):
                 raise BadStrategy
         except TypeError:
             raise BadStrategy
-        if self.indices.master == self.stopCount: return None
-        stored = self.indices.stored[self.indices.master.name]
+        if self._iterCount == self.stopCount: return None
+        stored = self.indices.stored[self._iterCount.name]
         if stored:
             i = max(stored)
-            if i != self.indices.master:
+            if i != self._iterCount:
                 self.load(i)
-        if self.indices.master == self.stopCount: return None
+        if self._iterCount == self.stopCount: return None
         self.go(**kwargs)
     @_iterable_initialise_if_necessary(post = True)
     def _reach_index(self, stop, index = None):
@@ -245,6 +247,7 @@ class Iterable(Prompter, Stateful, Indexable):
                 self.iterate()
         except StopIteration:
             pass
+        self.stopCount = self.indices['count'].value
     def _go_integral(self, stop, **kwargs):
         for _ in range(stop):
             self.iterate(**kwargs)
@@ -298,7 +301,7 @@ class SpecFrame:
         self.case = case
         self._frame = self._get_local_frame(case)
         if targ is None:
-            targ = frame.indices.master.value
+            targ = frame._iterCount.value
             self._index = targ
         else:
             self._index = None
@@ -310,7 +313,7 @@ class SpecFrame:
     def compute(self):
         if self._index is None:
             self._frame.reach(*self.targs)
-            self._index = self._frame.indices.master.value
+            self._index = self._frame._iterCount.value
         else:
             self._frame.reach(self._index)
         self._frame.store(silent = True)

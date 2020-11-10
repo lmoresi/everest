@@ -7,7 +7,7 @@ import numpy as np
 
 from h5anchor.reader import PathNotInFrameError
 from h5anchor.anchor import NoActiveAnchorError
-from funcy import Fn
+from funcy import Fn, MutableVariable
 from funcy import exceptions as funcyex
 import wordhash
 
@@ -31,18 +31,22 @@ class IndexableLoadRedundant(IndexableLoadFail):
 class NotIndexlike(TypeError, IndexableException):
     pass
 
+class IndexVar(MutableVariable):
+    def __init__(self, *args, compType = numbers.Number, **kwargs):
+        self.compType = compType
+        super().__init__(*args, **kwargs)
+
 class FrameIndices(Mapping, Hosted):
 
-    def __init__(self, host):
+    def __init__(self, host, indexers):
+        self.indexers = indexers
+        self._indexerDict = OrderedDict(
+            zip((i.name for i in self.indexers), self.indexers)
+            )
+        self._length = len(self.indexers)
+        self.master = indexers[0]
+        self.types = tuple(i.compType for i in indexers)
         super().__init__(host)
-
-    @property
-    def types(self):
-        return tuple(self.frame._indexerTypes())
-
-    @property
-    def master(self):
-        return self.frame.master
 
     @property
     def info(self):
@@ -111,52 +115,51 @@ class FrameIndices(Mapping, Hosted):
         return not (self.isnull or self.iszero)
 
     @property
-    def disk(self):
-        diskIndices = OrderedDict()
-        for k in self.keys():
-            diskIndices[k] = list(self.frame.readouts[k])
-        return diskIndices
-    @property
-    def stored(self):
-        storedIndices = OrderedDict()
-        stored = dict(self.frame.storage.zipstacked)
-        for k in self.keys():
-            storedIndices[k] = list(stored[k])
-        return storedIndices
-    @property
-    def all(self):
-        return self._all()
-    def _all(self, clashes = False):
-        combinedIndices = OrderedDict()
-        try:
-            diskIndices = self.disk
-        except (NoActiveAnchorError, PathNotInFrameError):
-            diskIndices = OrderedDict([k, []] for k in self.keys())
-        storedIndices = self.stored
-        for k in self.keys():
-            combinedIndices[k] = sorted(set(
-                [*diskIndices[k], *storedIndices[k]]
-                ))
-        if clashes:
-            clashes = OrderedDict()
-            for k in self.keys():
-                clashes[k] = sorted(set.intersection(
-                    set(diskIndices[k]), set(storedIndices[k])
-                    ))
-            return combinedIndices, clashes
+    def disk(self, key = None):
+        if key is None:
+            for k in self: yield k, self.frame.readouts[k]
         else:
-            return combinedIndices
-    def drop_clashes(self):
-        _, clashes = self._all(clashes = True)
-        clashes = zip(*clashes.values())
-        stored = zip(*[self.frame.storage.stored[k] for k in self.keys()])
-        toDrop = []
-        # print(list(clashes))
-        # print(list(stored))
-        for i, row in enumerate(stored):
-            if any(all(r == c for r, c in zip(row, crow)) for crow in clashes):
-                toDrop.append(i)
-        self.frame.storage.drop(toDrop)
+            return self.frame.readouts[key]
+    @property
+    def stored(self, key = None):
+        if key is None:
+            for k in self: yield k, self.frame.stored[k]
+        else:
+            return self.frame.stored[k]
+    @property
+    def captured(self):
+        return self._all()
+    # def _all(self, clashes = False):
+    #     combinedIndices = OrderedDict()
+    #     try:
+    #         diskIndices = self.disk
+    #     except (NoActiveAnchorError, PathNotInFrameError):
+    #         diskIndices = OrderedDict([k, []] for k in self.keys())
+    #     storedIndices = self.stored
+    #     for k in self.keys():
+    #         combinedIndices[k] = sorted(set(
+    #             [*diskIndices[k], *storedIndices[k]]
+    #             ))
+    #     if clashes:
+    #         clashes = OrderedDict()
+    #         for k in self.keys():
+    #             clashes[k] = sorted(set.intersection(
+    #                 set(diskIndices[k]), set(storedIndices[k])
+    #                 ))
+    #         return combinedIndices, clashes
+    #     else:
+    #         return combinedIndices
+    # def drop_clashes(self):
+    #     _, clashes = self._all(clashes = True)
+    #     clashes = zip(*clashes.values())
+    #     stored = zip(*[self.frame.storage.stored[k] for k in self.keys()])
+    #     toDrop = []
+    #     # print(list(clashes))
+    #     # print(list(stored))
+    #     for i, row in enumerate(stored):
+    #         if any(all(r == c for r, c in zip(row, crow)) for crow in clashes):
+    #             toDrop.append(i)
+    #     self.frame.storage.drop(toDrop)
 
     # def out(self):
     #     outs = super(Indexable, self.frame)._out()
@@ -168,6 +171,7 @@ class FrameIndices(Mapping, Hosted):
     #     return outs
 
     def save(self):
+        raise NotYetImplemented
         self.drop_clashes()
         return super(Indexable, self.frame)._save()
 
@@ -190,10 +194,10 @@ class FrameIndices(Mapping, Hosted):
         except TypeError:
             return super(Indexable, self.frame)._load(arg, **kwargs)
         try:
-            ind = self.frame.storage.index(**{ik: arg})
+            ind = self.frame.storage.index(arg, key = ik)
         except ValueError:
             try:
-                ind = self.disk[ik].index(arg)
+                ind = np.argwhere(self.disk[ik] == arg)[0][0]
             except (ValueError, NoActiveAnchorError, PathNotInFrameError):
                 raise IndexableLoadFail
             return self.frame._load_index_disk(ind, **kwargs)
@@ -205,13 +209,14 @@ class FrameIndices(Mapping, Hosted):
         return all(i == a for i, a in zip(self.values(), arg))
 
     def __getitem__(self, i):
-        if type(i) is str:
-            i = list(self.frame._indexerKeys()).index(i)
-        return list(self.frame._indexers())[i]
+        try:
+            return self._indexerDict[i]
+        except KeyError:
+            return self.indexers[i]
     def __len__(self):
-        return len(tuple(self.frame._indexerKeys()))
+        return self._length
     def __iter__(self):
-        return self.frame._indexerKeys()
+        return iter(self._indexerDict)
     def __setitem__(self, key, arg):
         self[key].value = arg
 
@@ -225,42 +230,32 @@ class FrameIndices(Mapping, Hosted):
 
 class Indexable(Producer):
 
-    _defaultCountsKey = 'count'
-
     def __init__(self,
+            _indices = [],
             **kwargs
             ):
-        self._indices = None
-        self._countsKey = self._defaultCountsKey
-        self.master = Fn(
+        var = IndexVar(
             np.int32,
-            name = self._countsKey,
+            compType = numbers.Integral,
+            name = 'count',
             )
+        self.indices = FrameIndices(self, [var, *_indices])
         super().__init__(**kwargs)
 
     def _vector(self):
         for pair in super()._vector(): yield pair
         yield ('count', self.indices)
 
-    @property
-    def indices(self):
-        if self._indices is None:
-            self._indices = FrameIndices(self)
-        return self._indices
-
-    def _indexers(self):
-        yield self.master
-    def _indexerKeys(self):
-        yield self._countsKey
-    def _indexerTypes(self):
-        yield numbers.Integral
-
     def _out_keys(self):
         for k in super()._out_keys(): yield k
-        for k in self._indexerKeys(): yield k
+        for k in self.indices.keys(): yield k
     def _out_vals(self):
         for v in super()._out_vals(): yield v
-        for v in self._indexers(): yield v.data
+        for v in self.indices.values(): yield v.data
+    def _out_types(self):
+        for t in super()._out_types(): yield t
+        for i in self.indices.values(): yield i.dtype
+
     def _save(self):
         return self.indices.save()
     def _load_process(self, outs):

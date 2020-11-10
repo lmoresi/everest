@@ -148,6 +148,13 @@ class Stateful(Observable, Producer):
     def _out_vals(self):
         for v in super()._out_vals(): yield v
         for v in self._state_vars(): yield v.data if not v is None else None
+    def _out_types(self):
+        for t in super()._out_types(): yield t
+        for v in self._state_vars():
+            try:
+                yield v.dtype
+            except AttributeError:
+                yield v
     # def _out(self):
     #     outs = super()._out()
     #     if self._observationMode:
