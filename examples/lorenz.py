@@ -1,8 +1,7 @@
 from everest.frames._traversable import Traversable
+from everest.frames._chronable import Chronable
 
-
-
-class Lorenz(Traversable):
+class Lorenz(Traversable, Chronable):
 
     def __init__(self,
             # params
@@ -20,6 +19,7 @@ class Lorenz(Traversable):
         super().__init__(**kwargs)
 
         x, y, z = self.state.values()
+        self._chronVar = self.indices['chron']
         def lorenz():
             xi, yi, zi = x.data, y.data, z.data
             return (
@@ -33,6 +33,7 @@ class Lorenz(Traversable):
                     lorenz()
                     ):
                 v.data += dot * dt
+            self._chronVar += dt
         self._integrate = _integrate
 
     def _iterate(self, **kwargs):

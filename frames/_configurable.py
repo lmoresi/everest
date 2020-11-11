@@ -96,30 +96,30 @@ class Configurable(Stateful):
         self.outputKey = 'outputs/' + self.configs.hashID
         self.del_storage()
 
-    def _save(self):
-        super()._save()
-        self.writeouts.add_dict({'configs': self.configs.vars})
-
-    def _load(self, arg, **kwargs):
-        if arg is None:
-            self.configs.apply()
-        elif type(arg) is str:
-            try:
-                self.configs.load(arg)
-            except KeyError:
-                # may be problematic
-                readpath = '/'.join([
-                    self.outputMasterKey,
-                    arg,
-                    'configs',
-                    ])
-                self.configs[...] = self.reader[readpath]
-        else:
-            super()._load(arg, **kwargs)
-
     def __setitem__(self, key, val):
         if type(key) is tuple:
             raise ValueError
         if type(key) is slice:
             raise NotYetImplemented
         self.configs[key] = val
+
+    # def _save(self):
+    #     super()._save()
+    #     self.writeouts.add_dict({'configs': self.configs.vars})
+
+    # def _load(self, arg, **kwargs):
+    #     if arg is None:
+    #         self.configs.apply()
+    #     elif type(arg) is str:
+    #         try:
+    #             self.configs.load(arg)
+    #         except KeyError:
+    #             # may be problematic
+    #             readpath = '/'.join([
+    #                 self.outputMasterKey,
+    #                 arg,
+    #                 'configs',
+    #                 ])
+    #             self.configs[...] = self.reader[readpath]
+    #     else:
+    #         super()._load(arg, **kwargs)

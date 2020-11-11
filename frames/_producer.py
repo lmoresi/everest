@@ -81,10 +81,11 @@ class Storage(Mapping):
     def __len__(self):
         return self.storedCount
     def __getitem__(self, key):
-        try:
-            return self.stored[key][:self.storedCount]
-        except KeyError:
-            return self.storedList[key][:self.storedCount]
+        try: return self.stored[key][:self.storedCount]
+        except KeyError: pass
+        try: return self.storedList[key][:self.storedCount]
+        except (TypeError, IndexError): pass
+        raise KeyError
     def __iter__(self):
         return iter(self.stored)
     def clear(self, silent = False):
@@ -125,18 +126,18 @@ class Storage(Mapping):
     def strnbytes(self):
         return prettify_nbytes(self.nbytes)
 
-def _producer_load_wrapper(func):
-    @wraps(func)
-    def wrapper(self, *args, process = False, **kwargs):
-        loaded = func(self, *args, **kwargs)
-        if process:
-            leftovers = self._load_process(loaded)
-            if len(leftovers):
-                raise ProducerLoadFail(leftovers)
-            return
-        else:
-            return loaded
-    return wrapper
+# def _producer_load_wrapper(func):
+#     @wraps(func)
+#     def wrapper(self, *args, process = False, **kwargs):
+#         loaded = func(self, *args, **kwargs)
+#         if process:
+#             leftovers = self._load_process(loaded)
+#             if len(leftovers):
+#                 raise ProducerLoadFail(leftovers)
+#             return
+#         else:
+#             return loaded
+#     return wrapper
 
 def _producer_update_outs(func):
     @wraps(func)
@@ -242,15 +243,36 @@ class Producer(Frame):
             self.writeouts.add(wrapped, key)
         # self.writeouts.add_dict(self.storage.collateral, 'collateral')
 
-    def _load_process(self, outs):
-        return outs
-    @_producer_load_wrapper
-    def _load_raw(self, outs):
-        if not outs.name == self.storage.name:
-            raise ProducerLoadFail(
-                "SubKeys misaligned:", (outs.name, self.storage.name)
-                )
-        return {**outs}
+    def load(self, arg):
+        self.process_loaded(self.load_out(arg))
+    def load_out(self, arg):
+        return self._load_out(arg)
+    def _load_out(self, i):
+        return self.load_stored(i)
+    def load_stored(self, i):
+        try:
+            loaded = OrderedDict(self.storage.retrieve(i))
+            loaded.name = self.storage.name
+            return loaded
+        except IndexError:
+            raise LoadFail
+
+    def process_loaded(self, loaded):
+        leftovers = self._process_loaded(loaded)
+        assert not len(leftovers)
+    def _process_loaded(self, loaded):
+        return loaded
+
+    #
+    # def _load_process(self, outs):
+    #     return outs
+    # @_producer_load_wrapper
+    # def _load_raw(self, outs):
+    #     if not outs.name == self.storage.name:
+    #         raise ProducerLoadFail(
+    #             "SubKeys misaligned:", (outs.name, self.storage.name)
+    #             )
+    #     return {**outs}
     # @_producer_load_wrapper
     # def _load_siblings(self, arg):
     #     for sibling in self.siblings:
@@ -259,36 +281,35 @@ class Producer(Frame):
     #         except LoadFail:
     #             pass
     #     raise LoadFail
-    @_producer_load_wrapper
-    def _load_index_stored(self, index):
-        return OrderedDict(self.storage.retrieve(index))
-    @_producer_load_wrapper
-    def _load_index_disk(self, index):
-        ks = self.storage.keys()
-        return dict(zip(ks, (self.readouts[k][index] for k in ks)))
-    def _load_index(self, index, **kwargs):
-        try:
-            return self._load_index_stored(index, **kwargs)
-        except IndexError:
-            return self._load_index_disk(index, **kwargs)
-    def _load(self, arg, **kwargs):
-        if isinstance(arg, dict):
-            return self._load_raw(arg, **kwargs)
-        else:
-            try:
-                return self._load_index(arg, **kwargs)
-            except IndexError:
-                raise ProducerLoadFail
-            except TypeError:
-                raise LoadFail
-    def load(self, arg, silent = False, process = True, **kwargs):
-        try:
-            return self._load(arg, process = process, **kwargs)
-        except LoadFail as e:
-            # try:
-            #     return self._load_siblings(arg, **kwargs)
-            # except LoadFail:
-            if not silent:
-                raise e
-            else:
-                return
+    # @_producer_load_wrapper
+
+    # @_producer_load_wrapper
+    # def _load_index_disk(self, index):
+    #     ks = self.storage.keys()
+    #     return dict(zip(ks, (self.readouts[k][index] for k in ks)))
+    # def _load_index(self, index, **kwargs):
+    #     try:
+    #         return self._load_index_stored(index, **kwargs)
+    #     except IndexError:
+    #         return self._load_index_disk(index, **kwargs)
+    # def _load_out(self, arg, **kwargs):
+    #     if isinstance(arg, dict):
+    #         return self._load_raw(arg, **kwargs)
+    #     else:
+    #         try:
+    #             return self._load_index(arg, **kwargs)
+    #         except IndexError:
+    #             raise ProducerLoadFail
+    #         except TypeError:
+    #             raise LoadFail
+    # def load(self, arg, silent = False, process = True, **kwargs):
+    #     try:
+    #         return self._load(arg, process = process, **kwargs)
+    #     except LoadFail as e:
+    #         # try:
+    #         #     return self._load_siblings(arg, **kwargs)
+    #         # except LoadFail:
+    #         if not silent:
+    #             raise e
+    #         else:
+    #             return

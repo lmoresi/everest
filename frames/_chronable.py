@@ -14,7 +14,8 @@ class Chronable(Indexable):
             compType = numbers.Real,
             name = 'chron',
             )
+        _indices.append(var)
         super().__init__(
-            _indices = [var, *_indices],
+            _indices = _indices,
             **kwargs
             )

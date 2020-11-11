@@ -64,21 +64,15 @@ class Iterable(Prompter, Stateful, Indexable):
             ):
 
         self.baselines = dict()
-        self.stopCount = None
+        self.terminus = None
 
         super().__init__(**kwargs)
 
         self._iterCount = self.indices[0]
 
-    def initialise(self, silent = False):
-        if self.initialised:
-            if silent:
-                pass
-            else:
-                raise IterableAlreadyInitialised
-        else:
-            self._initialise()
-            assert self.initialised
+    def initialise(self):
+        if self.initialised: raise IterableAlreadyInitialised
+        self._initialise()
     def _initialise(self):
         self.indices.zero()
         self._iterable_changed_state_hook()
@@ -88,8 +82,9 @@ class Iterable(Prompter, Stateful, Indexable):
     @property
     def postinitialised(self):
         return self.indices.ispos
-    def reset(self, silent = True):
-        self.initialise(silent = silent)
+    def reset(self):
+        try: self.initialise()
+        except IterableAlreadyInitialised: pass
     @_producer_update_outs
     @_prompter_prompt_all
     def _iterable_changed_state_hook(self):
@@ -106,7 +101,7 @@ class Iterable(Prompter, Stateful, Indexable):
     def _iterate(self):
         self._iterCount += 1
 
-    def _try_load(self, stop, silent = False):
+    def _try_load(self, stop):
         try: self.load(stop)
         except LoadFail: raise BadStrategy
     def _try_convert(self, stop):
@@ -157,32 +152,31 @@ class Iterable(Prompter, Stateful, Indexable):
                 raise BadStrategy
         except TypeError:
             raise BadStrategy
-        if self._iterCount == self.stopCount: return None
-        stored = self.indices.stored[self._iterCount.name]
+        if self._iterCount == self.terminus: return None
+        stored = self.storage[self._iterCount.name]
         if stored:
             i = max(stored)
             if i != self._iterCount:
                 self.load(i)
-        if self._iterCount == self.stopCount: return None
+        if self._iterCount == self.terminus: return None
         self.go(**kwargs)
-    @_iterable_initialise_if_necessary(post = True)
+    # @_iterable_initialise_if_necessary(post = True)
     def _reach_index(self, stop, index = None):
         if index is None:
             index = self._try_index(stop)
         if index == stop:
             raise StopIteration
-        stored = self.indices.stored[index.name]
-        try: latest = sorted(i for i in stored if i < index)[-1]
-        except IndexError: latest = None
-        if not latest is None:
-            return self.load(latest)
-        else:
-            if index > stop:
+        self.storage.tidy()
+        stored = self.storage[index.name]
+        try:
+            self.load(stored[stored <= stop].max())
+        except IndexError:
+            if index.value > stop:
                 self.reset()
         stop = index >= stop
         while not stop:
             self.iterate()
-    @_iterable_initialise_if_necessary(post = True)
+    # @_iterable_initialise_if_necessary(post = True)
     def _reach_fn(self, stop, **kwargs):
         stop = self._try_convert(stop)
         try:
@@ -201,30 +195,21 @@ class Iterable(Prompter, Stateful, Indexable):
         else:
             self._stride(**kwargs)
     def _stride(self, stop = IterableEnded, **kwargs):
-        if stop is None:
-            raise ValueError
-        strats = (self._reach_end, self._stride_index, self._stride_fn)
-        self._try_strats(*strats, stop = stop, **kwargs)
-    @_iterable_initialise_if_necessary(post = True)
-    def _stride_index(self, stop, **kwargs):
-        index = self._try_index(stop)
-        stop = (index + stop).value
-        while index < stop:
-            self.iterate(**kwargs)
-    @_iterable_initialise_if_necessary(post = True)
-    def _stride_fn(self, stop, **kwargs):
-        stop = self._try_convert(stop)
-        ind, val = self.indices.get_now()
-        stop = (ind >= val) & stop
         try:
-            self._try_load(stop)
+            self.load(stop)
+        except LoadFail:
+            pass
+        try:
+            index = self._try_index(stop)
+            stop = (index + stop).value
+            return self._reach_index(stop, index)
         except BadStrategy:
-            closed = stop.allclose(self)
-            while not closed:
-                self.iterate(**kwargs)
+            pass
+        return self._go_fn(stop)
+
 
     # GO
-    @_iterable_initialise_if_necessary(post = True)
+    # @_iterable_initialise_if_necessary(post = True)
     def go(self, *args, **kwargs):
         if args:
             *args, arg = args
@@ -247,14 +232,13 @@ class Iterable(Prompter, Stateful, Indexable):
                 self.iterate()
         except StopIteration:
             pass
-        self.stopCount = self.indices['count'].value
+        self.terminus = self.indices[0].value
     def _go_integral(self, stop, **kwargs):
         for _ in range(stop):
             self.iterate(**kwargs)
     def _go_index(self, stop, index = None, **kwargs):
-        if index is None:
-            index = self._try_index(stop)
-        stop += index.value if not self.indices.isnull else 0
+        index = self._try_index(stop)
+        stop = (index + stop).value
         while index < stop:
             self.iterate(**kwargs)
     def _go_fn(self, stop, **kwargs):
@@ -264,27 +248,20 @@ class Iterable(Prompter, Stateful, Indexable):
             self.iterate(**kwargs)
 
     # RUN
-    @_iterable_initialise_if_necessary()
+    # @_iterable_initialise_if_necessary()
     def run(self, *args, **kwargs):
         self.go(*args, **kwargs)
 
-    @_iterable_initialise_if_necessary(post = True)
-    def _out(self):
-        return super()._out()
     @_iterable_changed_state
-    def _load(self, arg, **kwargs):
-        super()._load(arg, **kwargs)
-    def load(self, arg, process = True, **kwargs):
-        try:
-            return super().load(arg, process = process, **kwargs)
-        except IndexableLoadFail as e:
-            if arg == 0:
-                if not self.indices.iszero:
-                    self.initialise()
-                if not process:
-                    return self.out()
-            else:
-                raise e
+    def _process_loaded(self, *args, **kwargs):
+        return super()._process_loaded(*args, **kwargs)
+    def _load_out(self, arg):
+        if type(arg) is type:
+            if issubclass(arg, StopIteration):
+                if self.terminus is None:
+                    raise LoadFail
+                return self.load_index(self.terminus)
+        return super()._load_out(arg)
 
     @casemethod
     def __getitem__(self, key):
@@ -316,7 +293,7 @@ class SpecFrame:
             self._index = self._frame._iterCount.value
         else:
             self._frame.reach(self._index)
-        self._frame.store(silent = True)
+        self._frame.store()
     def _compute_wrap(func):
         @wraps(func)
         def wrapper(self, *args, **kwargs):
@@ -373,3 +350,29 @@ class IntervalIterator(SpecFrame, abcIterator):
             self._frame.stride(self.step)
             self.i += 1
             return self._frame[None]
+
+    #
+    #     if stop is None:
+    #         raise ValueError
+    #     strats = (self._reach_end, self._stride_index, self._stride_fn)
+    #     self._try_strats(*strats, stop = stop, **kwargs)
+    # # @_iterable_initialise_if_necessary(post = True)
+    # def _stride_index(self, stop, **kwargs):
+    #     try:
+    #         self._try_load(stop)
+    #     except BadStra
+    #     index = self._try_index(stop)
+    #     stop = (index + stop).value
+    #     while index < stop:
+    #         self.iterate(**kwargs)
+    # # @_iterable_initialise_if_necessary(post = True)
+    # def _stride_fn(self, stop, **kwargs):
+    #     stop = self._try_convert(stop)
+    #     ind, val = self.indices.get_now()
+    #     stop = (ind >= val) & stop
+    #     try:
+    #         self._try_load(stop)
+    #     except BadStrategy:
+    #         closed = stop.allclose(self)
+    #         while not closed:
+    #             self.iterate(**kwargs)

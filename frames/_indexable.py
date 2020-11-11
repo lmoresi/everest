@@ -123,9 +123,9 @@ class FrameIndices(Mapping, Hosted):
     @property
     def stored(self, key = None):
         if key is None:
-            for k in self: yield k, self.frame.stored[k]
+            for k in self: yield k, self.frame.storage[k]
         else:
-            return self.frame.stored[k]
+            return self.frame.storage[k]
     @property
     def captured(self):
         return self._all()
@@ -170,49 +170,50 @@ class FrameIndices(Mapping, Hosted):
     #     outs.update(add)
     #     return outs
 
-    def save(self):
-        raise NotYetImplemented
-        self.drop_clashes()
-        return super(Indexable, self.frame)._save()
+    # def save(self):
+    #     raise NotYetImplemented
+    #     self.drop_clashes()
+    #     return super(Indexable, self.frame)._save()
 
-    def load_process(self, outs):
-        outs = super(Indexable, self.frame)._load_process(outs)
-        vals = [outs.pop(k) for k in self.keys()]
-        if any([v is OutsNull for v in vals]):
-            raise IndexableLoadNull
-        if vals == self:
-            raise IndexableLoadRedundant(vals, self)
-        for val, i in zip(vals, self.values()):
-            i.value = val
-        return outs
-
-    def load(self, arg, **kwargs):
-        if isinstance(arg, Fn) and hasattr(arg, 'index'):
-            arg = arg.index
-        try:
-            i, ik, it = self.get_indexInfo(arg)
-        except TypeError:
-            return super(Indexable, self.frame)._load(arg, **kwargs)
-        try:
-            ind = self.frame.storage.index(arg, key = ik)
-        except ValueError:
-            try:
-                ind = np.argwhere(self.disk[ik] == arg)[0][0]
-            except (ValueError, NoActiveAnchorError, PathNotInFrameError):
-                raise IndexableLoadFail
-            return self.frame._load_index_disk(ind, **kwargs)
-        return self.frame._load_index_stored(ind, **kwargs)
+    # def load_process(self, outs):
+    #     outs = super(Indexable, self.frame)._load_process(outs)
+    #     vals = [outs.pop(k) for k in self.keys()]
+    #     if any([v is OutsNull for v in vals]):
+    #         raise IndexableLoadNull
+    #     if vals == self:
+    #         raise IndexableLoadRedundant(vals, self)
+    #     for val, i in zip(vals, self.values()):
+    #         i.value = val
+    #     return outs
+    #
+    # def load(self, arg, **kwargs):
+    #     if isinstance(arg, Fn) and hasattr(arg, 'index'):
+    #         arg = arg.index
+    #     try:
+    #         i, ik, it = self.get_indexInfo(arg)
+    #     except TypeError:
+    #         return super(Indexable, self.frame)._load(arg, **kwargs)
+    #     try:
+    #         ind = self.frame.storage.index(arg, key = ik)
+    #     except ValueError:
+    #         try:
+    #             ind = np.argwhere(self.disk[ik] == arg)[0][0]
+    #         except (ValueError, NoActiveAnchorError, PathNotInFrameError):
+    #             raise IndexableLoadFail
+    #         return self.frame._load_index_disk(ind, **kwargs)
+    #     return self.frame._load_index_stored(ind, **kwargs)
 
     def __eq__(self, arg):
         if isinstance(arg, type(self)):
             arg = arg.values()
         return all(i == a for i, a in zip(self.values(), arg))
 
-    def __getitem__(self, i):
-        try:
-            return self._indexerDict[i]
-        except KeyError:
-            return self.indexers[i]
+    def __getitem__(self, key):
+        try: return self._indexerDict[key]
+        except KeyError: pass
+        try: return self.indexers[key]
+        except (TypeError, IndexError): pass
+        raise KeyError
     def __len__(self):
         return self._length
     def __iter__(self):
@@ -248,9 +249,23 @@ class Indexable(Producer):
         for pair in super()._vector(): yield pair
         yield ('count', self.indices)
 
-    def _save(self):
-        return self.indices.save()
-    def _load_process(self, outs):
-        return self.indices.load_process(outs)
-    def _load(self, arg, **kwargs):
-        return self.indices.load(arg, **kwargs)
+    def _load_out(self, arg):
+        try: return self.load_index(arg)
+        except LoadFail: return super()._load_out(arg)
+    def load_index(self, arg):
+        try: indexVar = self.indices.get_index(arg)
+        except NotIndexlike: raise LoadFail
+        try: index = self.storage.index(arg, indexVar.name)
+        except (KeyError, IndexError): raise LoadFail
+        return self.load_stored(index)
+    def _process_loaded(self, loaded):
+        for key in self.indices:
+            self.indices[key].value = loaded.pop(key)
+        return super()._process_loaded(loaded)
+
+    # def _save(self):
+    #     return self.indices.save()
+    # def _load_process(self, outs):
+    #     return self.indices.load_process(outs)
+    # def _load(self, arg, **kwargs):
+    #     return self.indices.load(arg, **kwargs)

@@ -124,10 +124,15 @@ class Stateful(Observable, Producer):
         _outVars.extend(_stateVars)
         super().__init__(_outVars = _outVars, **kwargs)
 
-    def _save(self):
-        return self.state.save()
-    def _load_process(self, outs):
-        return self.state.load_process(outs)
+    def _process_loaded(self, loaded):
+        for key in self.state:
+            self.state[key].value = loaded.pop(key)
+        return super()._process_loaded(loaded)
+
+    # def _save(self):
+    #     return self.state.save()
+    # def _load_process(self, outs):
+    #     return self.state.load_process(outs)
 
     # def _load(self, arg, **kwargs):
     #     return self.state.load(arg, **kwargs)

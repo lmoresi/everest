@@ -28,9 +28,9 @@ class Traversable(Iterable, Configurable):
         self.configs.apply()
         super()._initialise(*args, **kwargs)
 
-    @_iterable_initialise_if_necessary(post = True)
-    def _out(self, *args, **kwargs):
-        return super()._out(*args, **kwargs)
+    # @_iterable_initialise_if_necessary(post = True)
+    # def _out(self, *args, **kwargs):
+    #     return super()._out(*args, **kwargs)
 
 # class Locality
 
