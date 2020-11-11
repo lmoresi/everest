@@ -91,17 +91,13 @@ class DynamicState(State):
         keyvalstr = ',\n    '.join(rows)
         return type(self).__name__ + '{\n    ' + keyvalstr + ',\n    }'
 
-class FrameState(DynamicState, Hosted):
+class FrameState(DynamicState):
 
-    def __init__(self, host):
-        Hosted.__init__(self, host)
+    def __init__(self, _stateVars):
+        self._vars = OrderedDict(
+            (v.name, v) for v in _stateVars
+            )
         State.__init__(self)
-    @property
-    def _vars(self):
-        return OrderedDict(zip(
-            tuple([*self.frame._state_keys()][1:]),
-            tuple([*self.frame._state_vars()][1:]),
-            ))
     def mutate(self, mutator):
         if isinstance(mutator, FrameState):
             warnings.warn(
@@ -110,51 +106,32 @@ class FrameState(DynamicState, Hosted):
                 )
         super().mutate(mutator)
 
-    # def out(self):
-    #     return OrderedDict(zip(
-    #         self.keys(),
-    #         (v.out() for v in self.values()),
-    #         ))
-    # def save(self):
-    #     return super(Stateful, self.frame)._save()
     def load_process(self, outs):
-        outs = super(Stateful, self.frame)._load_process(outs)
-        for k, v in self.items():
-            v.value = outs.pop(k)
-        return outs
-    # def load(self, arg, **kwargs):
-    #     return super(Stateful, self.frame)._load(arg, **kwargs)
-
-    @property
-    def data(self):
-        return self.out()
+        raise NotYetImplemented
+        # outs = super(Stateful, self.frame)._load_process(outs)
+        # for k, v in self.items():
+        #     v.value = outs.pop(k)
+        # return outs
 
 class Stateful(Observable, Producer):
 
     def __init__(self,
+            _stateVars = [],
+            _outVars = [],
             **kwargs
             ):
-        self.state = FrameState(self)
-        super().__init__(**kwargs)
+        self.state = FrameState(_stateVars)
+        _outVars.extend(_stateVars)
+        super().__init__(_outVars = _outVars, **kwargs)
 
-    def _state_keys(self):
-        yield None
-    def _state_vars(self):
-        yield None
+    def _save(self):
+        return self.state.save()
+    def _load_process(self, outs):
+        return self.state.load_process(outs)
 
-    def _out_keys(self):
-        for k in super()._out_keys(): yield k
-        for k in self._state_keys(): yield k
-    def _out_vals(self):
-        for v in super()._out_vals(): yield v
-        for v in self._state_vars(): yield v.data if not v is None else None
-    def _out_types(self):
-        for t in super()._out_types(): yield t
-        for v in self._state_vars():
-            try:
-                yield v.dtype
-            except AttributeError:
-                yield v
+    # def _load(self, arg, **kwargs):
+    #     return self.state.load(arg, **kwargs)
+
     # def _out(self):
     #     outs = super()._out()
     #     if self._observationMode:
@@ -163,10 +140,3 @@ class Stateful(Observable, Producer):
     #         add = self.state.out()
     #     outs.update(add)
     #     return outs
-
-    def _save(self):
-        return self.state.save()
-    def _load_process(self, outs):
-        return self.state.load_process(outs)
-    # def _load(self, arg, **kwargs):
-    #     return self.state.load(arg, **kwargs)

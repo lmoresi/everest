@@ -1,6 +1,6 @@
 import numpy as np
 import math
-from functools import wraps
+from functools import wraps, partial
 from collections.abc import Mapping
 from collections import OrderedDict
 import warnings
@@ -11,7 +11,7 @@ from h5anchor import Reader, Writer, disk
 from h5anchor.array import AnchorArray
 # import reseed
 
-from . import Frame
+from . import Frame, casemethod
 from ..exceptions import *
 from ..utilities import prettify_nbytes
 
@@ -61,31 +61,23 @@ class Storage(Mapping):
             blocklen = int(1e6)
             ):
         storedList = list()
-        filteredkeys = list()
         for k, v, t in zip(keys, vals, types):
-            if not t is None:
-                shape = v.shape if isinstance(v, np.ndarray) else ()
-                storedList.append(np.empty((blocklen, *shape), t))
-                filteredkeys.append(k)
+            shape = v.shape if isinstance(v, np.ndarray) else ()
+            storedList.append(np.empty((blocklen, *shape), t))
         self.storedList = storedList
-        self.stored = OrderedDict(zip(filteredkeys, self.storedList))
+        self.stored = OrderedDict(zip(keys, self.storedList))
         self.keys = self.stored.keys
-        self.masterKey = list(self.keys())[0]
         self.blocklen = blocklen
         self.storedCount = 0
         self.name = name
     def store(self, outs):
-        for k, v in outs:
-            if not k is None:
-                try:
-                    self.stored[k][self.storedCount] = v
-                except KeyError:
-                    dtype, shape = _get_data_properties(v)
-                    self.stored[k] = np.empty((self.blocklen, *shape), dtype)
-                    self.stored[k][self.storedCount] = v
-                except IndexError:
-                    raise NotYetImplemented
+        for s, v in zip(self.storedList, outs):
+            s[self.storedCount] = v.data
         self.storedCount += 1
+            # try:
+            #
+            # except AttributeError:
+            #     s[self.storedCount] = v
     def __len__(self):
         return self.storedCount
     def __getitem__(self, key):
@@ -103,7 +95,7 @@ class Storage(Mapping):
     def winnow(self, indices, invert = False):
         if invert:
             allIndices = np.arange(self.storedCount)
-            indices = allIndices[~np.in1d(allIndices, indices)]
+            indices = allIndices[np.in1d(allIndices, indices, invert = True)]
         length = len(indices)
         for key in self:
             subData = self[key]
@@ -157,54 +149,20 @@ def _producer_update_outs(func):
 class Producer(Frame):
 
     def __init__(self,
-            baselines = dict(),
+            # baselines = dict(),
+            _outVars = [],
             **kwargs
             ):
 
         self.outputKey = 'outputs'
+        self.outVars = _outVars
 
         super().__init__(**kwargs)
 
-        # self.baselines = dict()
-        # for key, val in sorted(baselines.items()):
-        #     self.baselines[key] = AnchorArray(val, extendable = False)
-
-        # super().__init__(baselines = self.baselines, **kwargs)
-
-
-    #     self._producer_token = 0
-    #
-    # def _update_token(self):
-    #     self._producer_token += 1
-
-    # @property
-    # def outputMasterKey(self):
-    #     return '/'.join([k for k in self._outputMasterKey() if len(k)])
-    # def _outputMasterKey(self):
-    #     yield 'outputs'
-    # @property
-    # def outputSubKey(self):
-    #     sk = '/'.join([k for k in self._outputSubKey() if len(k)])
-    #     if not len(sk):
-    #         sk = self._defaultOutputSubKey
-    #     return sk
-    # def _outputSubKey(self):
-    #     yield ''
-    # @property
-    # def outputKey(self):
-    #     keys = [self.outputMasterKey, self.outputSubKey]
-    #     return '/'.join([k for k in keys if len(k)])
-
-    def _out_keys(self):
-        yield None
-    def _out_vals(self):
-        yield None
-    def _out_types(self):
-        yield None
     def out(self):
-        for k, v in zip(self._out_keys(), self._out_vals()):
-            if not k is None:
-                yield k, v
+        for v in self.outVars:
+            yield v.name, v.value
+
     @property
     def storages(self):
         try:
@@ -215,29 +173,44 @@ class Producer(Frame):
     @property
     def storage(self):
         try:
-            storage = self.storages[self.outputKey]
+            return self._storage
+        except AttributeError:
+            self.add_storage()
+            return self._storage
+    def _get_storage(self, key):
+        try:
+            storage = self.storages[key]
         except KeyError:
-            storage = Storage(
-                self._out_keys(),
-                self._out_vals(),
-                self._out_types(),
-                self.outputKey
-                )
-            self.storages[self.outputKey] = storage
+            keys, vals, types = zip(*(
+                (v.name, v.value, v.dtype)
+                    for v in self.outVars
+                ))
+            storage = Storage(keys, vals, types, key)
+            self.storages[key] = storage
         return storage
-
-    def store(self, silent = False):
-        self._store(silent = silent)
-    def _store(self, silent = False):
-        self.storage.store(self.out())
-    def clear(self, silent = False):
-        self._clear(silent = silent)
-    def _clear(self, silent = False):
-        self.storage.clear(silent = silent)
+    def add_storage(self, key = None):
+        key = self.outputKey if key is None else key
+        storage = self._get_storage(key)
+        storeFn = storage.store
+        self._store = lambda: storeFn(self.outVars)
+        self._storage = storage
+    def del_storage(self):
+        del self._storage
+        del self._store
+    def store(self):
+        try:
+            self._store()
+        except AttributeError:
+            self.add_storage()
+            self._store()
+    def clear(self):
+        self.storage.clear()
     @property
+    @casemethod
     def nbytes(self):
         return sum([o.nbytes for o in self.storages.values()])
     @property
+    @casemethod
     def strnbytes(self):
         return prettify_nbytes(self.nbytes)
 

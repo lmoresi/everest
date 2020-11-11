@@ -232,6 +232,7 @@ class Indexable(Producer):
 
     def __init__(self,
             _indices = [],
+            _outVars = [],
             **kwargs
             ):
         var = IndexVar(
@@ -240,21 +241,12 @@ class Indexable(Producer):
             name = 'count',
             )
         self.indices = FrameIndices(self, [var, *_indices])
-        super().__init__(**kwargs)
+        _outVars = [*self.indices.values(), *_outVars]
+        super().__init__(_outVars = _outVars, **kwargs)
 
     def _vector(self):
         for pair in super()._vector(): yield pair
         yield ('count', self.indices)
-
-    def _out_keys(self):
-        for k in super()._out_keys(): yield k
-        for k in self.indices.keys(): yield k
-    def _out_vals(self):
-        for v in super()._out_vals(): yield v
-        for v in self.indices.values(): yield v.data
-    def _out_types(self):
-        for t in super()._out_types(): yield t
-        for i in self.indices.values(): yield i.dtype
 
     def _save(self):
         return self.indices.save()

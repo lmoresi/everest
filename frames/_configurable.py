@@ -80,37 +80,25 @@ class FrameConfigs(MutableConfigs, Hosted):
 
 class Configurable(Stateful):
 
-    _defaultConfigsKey = 'configs'
-
     def __init__(self,
+            _stateVars = [],
             **kwargs
             ):
-        self._configsKey = self._defaultConfigsKey
         self.configs = FrameConfigs(self)
-        super().__init__(**kwargs)
+        _stateVars.extend(self.configs.stateVars)
+        super().__init__(_stateVars = _stateVars, **kwargs)
 
     def _vector(self):
         for pair in super()._vector(): yield pair
         yield ('configs', self.configs)
 
-    def _state_keys(self):
-        for k in super()._state_keys(): yield k
-        for k in self.configs.keys(): yield k
-
-    def _state_vars(self):
-        for v in super()._state_vars(): yield v
-        for v in self.configs.stateVars: yield v
-
     def _configurable_changed_state_hook(self):
         self.outputKey = 'outputs/' + self.configs.hashID
-
-    # def _outputSubKey(self):
-    #     yield self.configs.hashID
-    #     for o in super()._outputSubKey(): yield o
+        self.del_storage()
 
     def _save(self):
         super()._save()
-        self.writeouts.add_dict({self._configsKey: self.configs.vars})
+        self.writeouts.add_dict({'configs': self.configs.vars})
 
     def _load(self, arg, **kwargs):
         if arg is None:
@@ -123,7 +111,7 @@ class Configurable(Stateful):
                 readpath = '/'.join([
                     self.outputMasterKey,
                     arg,
-                    self._configsKey
+                    'configs',
                     ])
                 self.configs[...] = self.reader[readpath]
         else:
