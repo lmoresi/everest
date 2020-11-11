@@ -9,10 +9,10 @@ import weakref
 from funcy import Fn, convert, NullValueDetected
 from wordhash import w_hash
 
-from . import Frame, casemethod
+from . import Frame
 from ._stateful import Stateful, State
 from ._indexable import Indexable, NotIndexlike, IndexableLoadFail
-from ._producer import LoadFail, _producer_update_outs
+from ._producer import LoadFail
 from ._prompter import Prompter, _prompter_prompt_all
 
 from ..exceptions import *
@@ -33,41 +33,37 @@ class BadStrategy(IterableException):
 class ExhaustedStrategies(IterableException):
     pass
 
-def _iterable_initialise_if_necessary(post = False):
-    def decorator(func):
-        @wraps(func)
-        def wrapper(self, *args, **kwargs):
-            if post:
-                cond = self.initialised or self.postinitialised
-            else:
-                cond = self.initialised
-            if not cond:
-                self.initialise()
-            return func(self, *args, **kwargs)
-        return wrapper
-    return decorator
-def _iterable_changed_state(func):
+def _iterable_initialise_if_necessary(func):
     @wraps(func)
     def wrapper(self, *args, **kwargs):
-        pc = (i.data for i in self.indices)
-        out = func(self, *args, **kwargs)
-        nc = (i.data for i in self.indices)
-        if nc != pc:
-            self._iterable_changed_state_hook()
-        return out
+        try:
+            return func(self, *args, **kwargs)
+        except NullValueDetected:
+            self.initialise()
+            return func(self, *args, **kwargs)
     return wrapper
 
+class IterableCase:
+    def __getitem__(case, key):
+        if type(key) is slice:
+            return Interval(case, key)
+        elif type(key) is tuple:
+            return Stage(case, *key)
+        else:
+            return Stage(case, key)
+
 class Iterable(Prompter, Stateful, Indexable):
+
+    @classmethod
+    def _casebases(cls):
+        for c in super()._casebases(): yield c
+        yield IterableCase
 
     def __init__(self,
             **kwargs
             ):
-
-        self.baselines = dict()
         self.terminus = None
-
         super().__init__(**kwargs)
-
         self._iterCount = self.indices[0]
 
     def initialise(self):
@@ -75,7 +71,6 @@ class Iterable(Prompter, Stateful, Indexable):
         self._initialise()
     def _initialise(self):
         self.indices.zero()
-        self._iterable_changed_state_hook()
     @property
     def initialised(self):
         return self.indices.iszero
@@ -85,21 +80,19 @@ class Iterable(Prompter, Stateful, Indexable):
     def reset(self):
         try: self.initialise()
         except IterableAlreadyInitialised: pass
-    @_producer_update_outs
-    @_prompter_prompt_all
-    def _iterable_changed_state_hook(self):
-        pass
+    @_iterable_initialise_if_necessary
+    def _get_storage(self, *args, **kwargs):
+        return super()._get_storage(*args, **kwargs)
 
     # ITERATE
     def iterate(self):
         try:
             self._iterate()
-        except NullValueDetected:
+        except (TypeError, NullValueDetected):
             self.initialise()
             self._iterate()
-        self._iterable_changed_state_hook()
     def _iterate(self):
-        self._iterCount += 1
+        self._iterCount.data += 1
 
     def _try_load(self, stop):
         try: self.load(stop)
@@ -152,15 +145,16 @@ class Iterable(Prompter, Stateful, Indexable):
                 raise BadStrategy
         except TypeError:
             raise BadStrategy
-        if self._iterCount == self.terminus: return None
+        presentCount = self._iterCount.data
+        if presentCount == self.terminus: return None
         stored = self.storage[self._iterCount.name]
         if stored:
             i = max(stored)
-            if i != self._iterCount:
+            if i != presentCount:
                 self.load(i)
-        if self._iterCount == self.terminus: return None
+            if i == self.terminus: return None
         self.go(**kwargs)
-    # @_iterable_initialise_if_necessary(post = True)
+    @_iterable_initialise_if_necessary
     def _reach_index(self, stop, index = None):
         if index is None:
             index = self._try_index(stop)
@@ -170,13 +164,12 @@ class Iterable(Prompter, Stateful, Indexable):
         stored = self.storage[index.name]
         try:
             self.load(stored[stored <= stop].max())
-        except IndexError:
+        except (IndexError, ValueError):
             if index.value > stop:
                 self.reset()
         stop = index >= stop
         while not stop:
             self.iterate()
-    # @_iterable_initialise_if_necessary(post = True)
     def _reach_fn(self, stop, **kwargs):
         stop = self._try_convert(stop)
         try:
@@ -207,9 +200,7 @@ class Iterable(Prompter, Stateful, Indexable):
             pass
         return self._go_fn(stop)
 
-
     # GO
-    # @_iterable_initialise_if_necessary(post = True)
     def go(self, *args, **kwargs):
         if args:
             *args, arg = args
@@ -248,11 +239,10 @@ class Iterable(Prompter, Stateful, Indexable):
             self.iterate(**kwargs)
 
     # RUN
-    # @_iterable_initialise_if_necessary()
     def run(self, *args, **kwargs):
+        self.reset()
         self.go(*args, **kwargs)
 
-    @_iterable_changed_state
     def _process_loaded(self, *args, **kwargs):
         return super()._process_loaded(*args, **kwargs)
     def _load_out(self, arg):
@@ -263,26 +253,13 @@ class Iterable(Prompter, Stateful, Indexable):
                 return self.load_index(self.terminus)
         return super()._load_out(arg)
 
-    @casemethod
-    def __getitem__(self, key):
-        if type(key) is tuple:
-            raise ValueError
-        elif type(key) is slice:
-            return Interval(self, key)
-        else:
-            return Stage(self, key)
-
 class SpecFrame:
     _preframes = weakref.WeakValueDictionary()
-    def __init__(self, case, targ, *targs):
+    def __init__(self, case, *targs):
         self.case = case
         self._frame = self._get_local_frame(case)
-        if targ is None:
-            targ = frame._iterCount.value
-            self._index = targ
-        else:
-            self._index = None
-        self.targs = tuple([targ, *targs])
+        self._index = None
+        self.targs = targs
         super().__init__()
     @classmethod
     def _get_local_frame(cls, case):
@@ -306,8 +283,8 @@ class SpecFrame:
         return self._frame
 
 class Stage(SpecFrame, State):
-    def __init__(self, arg, *targs):
-        super().__init__(arg, *targs)
+    def __init__(self, *targs):
+        super().__init__(*targs)
     @property
     def _vars(self):
         return self.frame.state.vars

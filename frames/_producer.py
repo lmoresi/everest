@@ -11,7 +11,7 @@ from h5anchor import Reader, Writer, disk
 from h5anchor.array import AnchorArray
 # import reseed
 
-from . import Frame, casemethod
+from . import Frame
 from ..exceptions import *
 from ..utilities import prettify_nbytes
 
@@ -72,12 +72,11 @@ class Storage(Mapping):
         self.name = name
     def store(self, outs):
         for s, v in zip(self.storedList, outs):
-            s[self.storedCount] = v.data
+            try:
+                s[self.storedCount] = v.data
+            except TypeError:
+                raise TypeError(v)
         self.storedCount += 1
-            # try:
-            #
-            # except AttributeError:
-            #     s[self.storedCount] = v
     def __len__(self):
         return self.storedCount
     def __getitem__(self, key):
@@ -126,28 +125,24 @@ class Storage(Mapping):
     def strnbytes(self):
         return prettify_nbytes(self.nbytes)
 
-# def _producer_load_wrapper(func):
-#     @wraps(func)
-#     def wrapper(self, *args, process = False, **kwargs):
-#         loaded = func(self, *args, **kwargs)
-#         if process:
-#             leftovers = self._load_process(loaded)
-#             if len(leftovers):
-#                 raise ProducerLoadFail(leftovers)
-#             return
-#         else:
-#             return loaded
-#     return wrapper
-
-def _producer_update_outs(func):
-    @wraps(func)
-    def wrapper(self, *args, **kwargs):
-        return func(self, *args, **kwargs)
-        # self._update_token()
-        # return toReturn
-    return wrapper
+class ProducerCase:
+    @property
+    def nbytes(case):
+        return sum([o.nbytes for o in case.storages.values()])
+    @property
+    def strnbytes(case):
+        return prettify_nbytes(case.nbytes)
 
 class Producer(Frame):
+
+    @classmethod
+    def _casebases(cls):
+        for c in super()._casebases(): yield c
+        yield ProducerCase
+    @classmethod
+    def _caseinit(cls):
+        for k, v in super()._caseinit(): yield k, v
+        yield 'storages', OrderedDict()
 
     def __init__(self,
             # baselines = dict(),
@@ -157,6 +152,7 @@ class Producer(Frame):
 
         self.outputKey = 'outputs'
         self.outVars = _outVars
+        self.outDict = dict((v.name, v) for v in self.outVars)
 
         super().__init__(**kwargs)
 
@@ -196,8 +192,10 @@ class Producer(Frame):
         self._store = lambda: storeFn(self.outVars)
         self._storage = storage
     def del_storage(self):
-        del self._storage
-        del self._store
+        try: del self._storage
+        except AttributeError: pass
+        try: del self._store
+        except AttributeError: pass
     def store(self):
         try:
             self._store()
@@ -206,14 +204,6 @@ class Producer(Frame):
             self._store()
     def clear(self):
         self.storage.clear()
-    @property
-    @casemethod
-    def nbytes(self):
-        return sum([o.nbytes for o in self.storages.values()])
-    @property
-    @casemethod
-    def strnbytes(self):
-        return prettify_nbytes(self.nbytes)
 
     def _producer_prompt(self, prompter):
         self.store()
@@ -262,6 +252,13 @@ class Producer(Frame):
         assert not len(leftovers)
     def _process_loaded(self, loaded):
         return loaded
+
+    def __getitem__(self, key):
+        try: return self.outDict[key]
+        except KeyError: pass
+        try: return self.outVars[key]
+        except (TypeError, IndexError): pass
+        raise KeyError
 
     #
     # def _load_process(self, outs):

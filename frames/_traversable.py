@@ -3,7 +3,7 @@ from functools import wraps
 
 from funcy import Function
 
-from ._iterable import Iterable, _iterable_initialise_if_necessary
+from ._iterable import Iterable
 from ._stateful import State
 from ._configurable import Configurable, Configs
 
@@ -13,7 +13,30 @@ class TraversableException(EverestException):
 class RedundantState(TraversableException):
     pass
 
+def _traversable_abs_steer(func):
+    @wraps(func)
+    def wrapper(self, *args, **kwargs):
+        if len(args):
+            config, *args = args
+            self[...] = config
+        return func(self, *args, **kwargs)
+    return wrapper
+
+# class TraversableCase:
+#     def __getitem__(case, key):
+#         if type(key) is tuple:
+#             return super().__getitem__(*key)
+#         elif type(key) is slice:
+#             return Interval(case, key)
+#         else:
+#             return Stage(case, key)
+
 class Traversable(Iterable, Configurable):
+
+    # @classmethod
+    # def _casebases(cls):
+    #     for c in super()._casebases(): yield c
+    #     yield ProducerCase
 
     def __init__(self,
             **kwargs
@@ -27,6 +50,13 @@ class Traversable(Iterable, Configurable):
     def _initialise(self, *args, **kwargs):
         self.configs.apply()
         super()._initialise(*args, **kwargs)
+
+    @_traversable_abs_steer
+    def reach(self, *args, **kwargs):
+        return super().reach(*args, **kwargs)
+    @_traversable_abs_steer
+    def run(self, *args, **kwargs):
+        return super().run(*args, **kwargs)
 
     # @_iterable_initialise_if_necessary(post = True)
     # def _out(self, *args, **kwargs):

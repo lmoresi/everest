@@ -18,23 +18,15 @@ class Lorenz(Traversable, Chronable):
 
         super().__init__(**kwargs)
 
-        x, y, z = self.state.values()
-        self._chronVar = self.indices['chron']
+        (x, y, z), chron = self.state.values(), self.indices['chron']
         def lorenz():
-            xi, yi, zi = x.data, y.data, z.data
-            return (
-                s*(yi - xi),
-                r*xi - yi - xi*zi,
-                xi*yi - b*zi,
-                )
-        def _integrate():
-            for v, dot in zip(
-                    (x, y, z),
-                    lorenz()
-                    ):
-                v.data += dot * dt
-            self._chronVar += dt
-        self._integrate = _integrate
+            yield x.data + dt * s * (y.data - x.data)
+            yield y.data + dt * (r * x.data - y.data - x.data * z.data)
+            yield z.data + dt * (x.data * y.data - b * z.data)
+            yield chron.data + dt
+        def integrate():
+            x.data, y.data, z.data, chron.data = lorenz()
+        self._integrate = integrate
 
     def _iterate(self, **kwargs):
         self._integrate()

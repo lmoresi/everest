@@ -35,9 +35,9 @@ class MutableConfigs(MutableState, Configs):
         for k, v in ordered_unpack(self.keys(), arg1, arg2).items():
             if not k in self.keys():
                 raise KeyError("Key not in configs: ", k)
-            v = self.defaults[k] if v is None else self._process_config(v)
+            v = self[k] if v is None else self._process_config(v)
             super().__setitem__(k, v)
-    def clear(self):
+    def reset(self):
         self.update(self.defaults)
     def update(self, arg):
         self[...] = arg
@@ -87,6 +87,7 @@ class Configurable(Stateful):
         self.configs = FrameConfigs(self)
         _stateVars.extend(self.configs.stateVars)
         super().__init__(_stateVars = _stateVars, **kwargs)
+        self._configurable_changed_state_hook()
 
     def _vector(self):
         for pair in super()._vector(): yield pair
