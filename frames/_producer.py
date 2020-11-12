@@ -237,15 +237,16 @@ class Producer(Frame):
     def load_out(self, arg):
         return self._load_out(arg)
     def _load_out(self, i):
-        return self.load_stored(i)
-    def load_stored(self, i):
+        return self._load_stored(i)
+    def _load_stored(self, i):
         try:
             loaded = OrderedDict(self.storage.retrieve(i))
             loaded.name = self.storage.name
             return loaded
         except IndexError:
             raise LoadFail
-
+    def load_stored(self, i):
+        self.process_loaded(self._load_stored(i))
     def process_loaded(self, loaded):
         leftovers = self._process_loaded(loaded)
         assert not len(leftovers)

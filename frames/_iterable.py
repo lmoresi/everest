@@ -7,7 +7,7 @@ from collections.abc import Iterator as abcIterator
 import weakref
 
 from funcy import Fn, convert, NullValueDetected
-from wordhash import w_hash
+import wordhash
 
 from . import Frame
 from ._stateful import Stateful, State
@@ -43,9 +43,43 @@ def _iterable_initialise_if_necessary(func):
             return func(self, *args, **kwargs)
     return wrapper
 
+class Stage(State):
+    def __init__(self, case, *args):
+        self.case, self.args = case, args
+    @property
+    def frame(self):
+        self.case.frame.reach(*self.args)
+        return self.case.frame
+    @property
+    def _vars(self):
+        return self.frame.state._vars
+    @property
+    def hashID(self):
+        return self._hashID
+
 class IterableCase:
-    def __getitem__(case, key):
-        raise NotYetImplemented
+    def __getitem__(case, keys):
+        if not type(keys) is tuple:
+            keys = (keys,)
+        hashID = wordhash.w_hash(tuple((case, *keys)))
+        stage = case.stages.setdefault(hashID, Stage(case, *keys))
+        stage._hashID = hashID
+        return stage
+    @property
+    def frame(case):
+        try:
+            return case._frame
+        except AttributeError:
+            case._frame = case()
+            return case._frame
+
+    @property
+    def stages(case):
+        try:
+            return case._stages
+        except AttributeError:
+            case._stages = weakref.WeakValueDictionary()
+            return case._stages
         # if type(key) is slice:
         #     return Interval(case, key)
         # elif type(key) is tuple:
@@ -238,7 +272,10 @@ class Iterable(Indexable, Prompter, Stateful):
         self.storage.tidy()
         stored = self.storage[index.name]
         try:
-            self.load(stored[stored <= stop].max())
+            stored = stored[stored <= stop].max()
+            self.load_index(stored)
+            if stored == stop:
+                return
         except (IndexError, ValueError):
             if index.value > stop:
                 self.reset()

@@ -259,14 +259,16 @@ class Indexable(Producer):
         yield ('count', self.indices)
 
     def _load_out(self, arg):
-        try: return self.load_index(arg)
+        try: return self._load_index(arg)
         except LoadFail: return super()._load_out(arg)
-    def load_index(self, arg):
+    def _load_index(self, arg):
         try: indexVar = self.indices.get_index(arg)
         except NotIndexlike: raise LoadFail
         try: index = self.storage.index(arg, indexVar.name)
         except (KeyError, IndexError): raise LoadFail
-        return self.load_stored(index)
+        return self._load_stored(index)
+    def load_index(self, arg):
+        self.process_loaded(self._load_index(arg))
     def _process_loaded(self, loaded):
         for key in self.indices:
             self.indices[key].value = loaded.pop(key)

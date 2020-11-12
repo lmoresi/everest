@@ -1,3 +1,5 @@
+import numpy as np
+
 from everest.frames._traversable import Traversable
 from everest.frames._chronable import Chronable
 
@@ -10,22 +12,24 @@ class Lorenz(Traversable, Chronable):
                 b = 2.667,
                 dt = 0.01,
             # _configs
-                x = 0.,
-                y = 1.,
-                z = 1.05,
+                coords = [0., 1., 1.05],
+                # x = 0.,
+                # y = 1.,
+                # z = 1.05,
             **kwargs
             ):
 
         super().__init__(**kwargs)
 
-        (x, y, z), chron = self.state.values(), self.indices['chron']
-        def lorenz():
-            yield x.data + dt * s * (y.data - x.data)
-            yield y.data + dt * (r * x.data - y.data - x.data * z.data)
-            yield z.data + dt * (x.data * y.data - b * z.data)
-            yield round(chron.data + dt, 12)
+        cs = self.state['coords'].data
+        chron = self.indices['chron']
         def integrate():
-            x.data, y.data, z.data, chron.data = lorenz()
+            cs[...] = (
+                cs[0] + dt * (s * (cs[1] - cs[0])),
+                cs[1] + dt * (r * cs[0] - cs[1] - cs[0] * cs[2]),
+                cs[2] + dt * (cs[0] * cs[1] - b * cs[2]),
+                )
+            chron.data = chron.data + dt
         self._integrate = integrate
 
     def _iterate(self, **kwargs):
