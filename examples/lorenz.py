@@ -23,7 +23,7 @@ class Lorenz(Traversable, Chronable):
             yield x.data + dt * s * (y.data - x.data)
             yield y.data + dt * (r * x.data - y.data - x.data * z.data)
             yield z.data + dt * (x.data * y.data - b * z.data)
-            yield chron.data + dt
+            yield round(chron.data + dt, 12)
         def integrate():
             x.data, y.data, z.data, chron.data = lorenz()
         self._integrate = integrate

@@ -45,19 +45,92 @@ def _iterable_initialise_if_necessary(func):
 
 class IterableCase:
     def __getitem__(case, key):
-        if type(key) is slice:
-            return Interval(case, key)
-        elif type(key) is tuple:
-            return Stage(case, *key)
-        else:
-            return Stage(case, key)
+        raise NotYetImplemented
+        # if type(key) is slice:
+        #     return Interval(case, key)
+        # elif type(key) is tuple:
+        #     return Stage(case, *key)
+        # else:
+        #     return Stage(case, key)
 
-class Iterable(Prompter, Stateful, Indexable):
+# class SpecFrame:
+#     _preframes = weakref.WeakValueDictionary()
+#     def __init__(self, case, *targs):
+#         self.case = case
+#         self._frame = self._preframes.setdefault(case.hashID, case())
+#         self.targs = targs
+#         super().__init__()
+#     def compute(self):
+#         self._frame.reach(*self.targs)
+#         self._frame.store()
+#     def _compute_wrap(func):
+#         @wraps(func)
+#         def wrapper(self, *args, **kwargs):
+#             self.compute()
+#             return func(self, *args, **kwargs)
+#         return wrapper
+#     @property
+#     @_compute_wrap
+#     def frame(self):
+#         return self._frame
+#     @property
+#     @_compute_wrap
+#     def index(self):
+#         return self._index
+#
+# class Stage(SpecFrame, State):
+#     def __init__(self, *targs):
+#         super().__init__(*targs)
+#     @property
+#     def _vars(self):
+#         return self.frame.state.vars
+#     def __repr__(self):
+#         content = [self._frame.hashID, *(repr(t) for t in self.targs)]
+#         return type(self).__name__ + '(' + ', '.join(content) + ')'
+#
+# class Interval(abcIterable):
+#     def __init__(self, case, slicer):
+#         if not type(slicer) is slice:
+#             slicer = slice(*slicer)
+#         self.start, self.stop, self.step = \
+#             slicer.start, slicer.stop, slicer.step
+#         self.frame = SpecFrame._get_local_frame(case)
+#         self.frame, self.slicer = frame, slicer
+#         super().__init__()
+#     def __iter__(self):
+#         return IntervalIterator(self.frame, self.start, self.stop, self.step)
+#     # def __getitem__(self, key):
+#     #     raise Exception
+#     def __repr__(self):
+#         name = type(self).__name__
+#         content = self.frame.hashID, self.slicer
+#         return name + '(' + ', '.join(repr(o) for o in content) + ')'
+#
+# class IntervalIterator(SpecFrame, abcIterator):
+#     def __init__(self, frame, start, stop, step):
+#         self.start = start
+#         self.step = 1 if step is None else step
+#         super().__init__(frame, self.start)
+#         self.stop = False if stop is None else self._frame._get_stop_fn(stop)
+#         self.i = 0
+#         self.compute()
+#     def __iter__(self):
+#         return self
+#     def __next__(self):
+#         if self.stop:
+#             raise StopIteration
+#         else:
+#             self._frame.stride(self.step)
+#             self.i += 1
+#             return self._frame[None]
+
+class Iterable(Indexable, Prompter, Stateful):
 
     @classmethod
-    def _casebases(cls):
-        for c in super()._casebases(): yield c
-        yield IterableCase
+    def _helperClasses(cls):
+        d = super()._helperClasses()
+        d['Case'][0].append(IterableCase)
+        return d
 
     def __init__(self,
             **kwargs
@@ -65,6 +138,8 @@ class Iterable(Prompter, Stateful, Indexable):
         self.terminus = None
         super().__init__(**kwargs)
         self._iterCount = self.indices[0]
+        for var in self.state._vars.values():
+            var.index = self._iterCount
 
     def initialise(self):
         if self.initialised: raise IterableAlreadyInitialised
@@ -253,80 +328,14 @@ class Iterable(Prompter, Stateful, Indexable):
                 return self.load_index(self.terminus)
         return super()._load_out(arg)
 
-class SpecFrame:
-    _preframes = weakref.WeakValueDictionary()
-    def __init__(self, case, *targs):
-        self.case = case
-        self._frame = self._get_local_frame(case)
-        self._index = None
-        self.targs = targs
-        super().__init__()
-    @classmethod
-    def _get_local_frame(cls, case):
-        return cls._preframes.setdefault(case.hashID, case())
-    def compute(self):
-        if self._index is None:
-            self._frame.reach(*self.targs)
-            self._index = self._frame._iterCount.value
-        else:
-            self._frame.reach(self._index)
-        self._frame.store()
-    def _compute_wrap(func):
-        @wraps(func)
-        def wrapper(self, *args, **kwargs):
-            self.compute()
-            return func(self, *args, **kwargs)
-        return wrapper
-    @property
-    @_compute_wrap
-    def frame(self):
-        return self._frame
-
-class Stage(SpecFrame, State):
-    def __init__(self, *targs):
-        super().__init__(*targs)
-    @property
-    def _vars(self):
-        return self.frame.state.vars
-    def __repr__(self):
-        content = [self._frame.hashID, *(repr(t) for t in self.targs)]
-        return type(self).__name__ + '(' + ', '.join(content) + ')'
-
-class Interval(abcIterable):
-    def __init__(self, case, slicer):
-        if not type(slicer) is slice:
-            slicer = slice(*slicer)
-        self.start, self.stop, self.step = \
-            slicer.start, slicer.stop, slicer.step
-        self.frame = SpecFrame._get_local_frame(case)
-        self.frame, self.slicer = frame, slicer
-        super().__init__()
-    def __iter__(self):
-        return IntervalIterator(self.frame, self.start, self.stop, self.step)
-    # def __getitem__(self, key):
-    #     raise Exception
-    def __repr__(self):
-        name = type(self).__name__
-        content = self.frame.hashID, self.slicer
-        return name + '(' + ', '.join(repr(o) for o in content) + ')'
-
-class IntervalIterator(SpecFrame, abcIterator):
-    def __init__(self, frame, start, stop, step):
-        self.start = start
-        self.step = 1 if step is None else step
-        super().__init__(frame, self.start)
-        self.stop = False if stop is None else self._frame._get_stop_fn(stop)
-        self.i = 0
-        self.compute()
-    def __iter__(self):
-        return self
-    def __next__(self):
-        if self.stop:
-            raise StopIteration
-        else:
-            self._frame.stride(self.step)
-            self.i += 1
-            return self._frame[None]
+    def __setitem__(self, key, val):
+        if not key is Ellipsis:
+            raise ValueError("Can only set Iterables with Ellipsis as key.")
+        if isinstance(val, Stage):
+            val = val.targs
+        elif not type(val) is tuple:
+            val = (val,)
+        self.reach(*val)
 
     #
     #     if stop is None:

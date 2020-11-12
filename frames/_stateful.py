@@ -22,7 +22,8 @@ class RedundantApplyState(StatefulException):
     pass
 
 class StateVar(MutableVariable):
-    pass
+    def mutate(self, mutator):
+        self.value = mutator
     # def _set_value(self, val):
     #     super()._set_value(val)
 
@@ -58,14 +59,16 @@ class State(Sequence, Mapping):
             raise KeyError(state.keys(), self.keys())
         state.mutate(self)
 
-    def __repr__(self):
+    def __str__(self):
         rows = []
         for k, v in self.items():
             row = k + ': '
             row += v.hashID if hasattr(v, 'hashID') else repr(v)
             rows.append(row)
         keyvalstr = ',\n    '.join(rows)
-        return type(self).__name__ + '{\n    ' + keyvalstr + ',\n    }'
+        return '{\n    ' + keyvalstr + ',\n    }'
+    def __repr__(self):
+        return type(self).__name__ + str(self)
     @property
     def hashID(self):
         return wordhash.w_hash(repr(self))
@@ -85,7 +88,7 @@ class DynamicState(State):
                 )
         for c, m in zip(mutator.values(), self.values()):
             if not c is Ellipsis:
-                m.value = c
+                m.mutate(c)
     def __repr__(self):
         rows = (': '.join((k, v.valstr)) for k, v in self.items())
         keyvalstr = ',\n    '.join(rows)
@@ -93,11 +96,15 @@ class DynamicState(State):
 
 class FrameState(DynamicState):
 
-    def __init__(self, _stateVars):
+    def __init__(self, _stateVars, instanceID, stateVarClass):
+        self.StateVar = stateVarClass
         self._vars = OrderedDict(
             (v.name, v) for v in _stateVars
             )
-        State.__init__(self)
+        for v in self._vars.values():
+            assert isinstance(v, self.StateVar)
+            v.sourceInstanceID = instanceID
+        super().__init__()
     def mutate(self, mutator):
         if isinstance(mutator, FrameState):
             warnings.warn(
@@ -115,12 +122,19 @@ class FrameState(DynamicState):
 
 class Stateful(Observable, Producer):
 
+    @classmethod
+    def _helperClasses(cls):
+        d = super()._helperClasses()
+        d['State'] = ([FrameState,], OrderedDict())
+        d['StateVar'] = ([StateVar,], OrderedDict())
+        return d
+
     def __init__(self,
             _stateVars = [],
             _outVars = [],
             **kwargs
             ):
-        self.state = FrameState(_stateVars)
+        self.state = self.State(_stateVars, self.instanceID, self.StateVar)
         _outVars.extend(_stateVars)
         super().__init__(_outVars = _outVars, **kwargs)
 

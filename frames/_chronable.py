@@ -1,7 +1,7 @@
 import numbers
 import numpy as np
 
-from ._indexable import Indexable, IndexVar
+from ._indexable import Indexable
 
 class Chronable(Indexable):
 
@@ -9,7 +9,7 @@ class Chronable(Indexable):
             _indices = [],
             **kwargs
             ):
-        var = IndexVar(
+        var = self.IndexVar(
             np.float32,
             compType = numbers.Real,
             name = 'chron',

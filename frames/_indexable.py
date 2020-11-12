@@ -221,27 +221,36 @@ class FrameIndices(Mapping, Hosted):
     def __setitem__(self, key, arg):
         self[key].value = arg
 
-    def __repr__(self):
+    def __str__(self):
         rows = [k + ': ' + str(v.data) for k, v in self.items()]
         keyvalstr = ',\n    '.join(rows)
-        return type(self).__name__ + '{\n    ' + keyvalstr + ',\n    }'
+        return '{\n    ' + keyvalstr + ',\n    }'
+    def __repr__(self):
+        return type(self).__name__ + str(self)
     @property
     def hashID(self):
         return wordhash.w_hash(repr(self))
 
 class Indexable(Producer):
 
+    @classmethod
+    def _helperClasses(cls):
+        d = super()._helperClasses()
+        d['Indices'] = ([FrameIndices,], OrderedDict())
+        d['IndexVar'] = ([IndexVar,], OrderedDict())
+        return d
+
     def __init__(self,
             _indices = [],
             _outVars = [],
             **kwargs
             ):
-        var = IndexVar(
+        var = self.IndexVar(
             np.int32,
             compType = numbers.Integral,
             name = 'count',
             )
-        self.indices = FrameIndices(self, [var, *_indices])
+        self.indices = self.Indices(self, [var, *_indices])
         _outVars = [*self.indices.values(), *_outVars]
         super().__init__(_outVars = _outVars, **kwargs)
 

@@ -127,6 +127,13 @@ class Storage(Mapping):
 
 class ProducerCase:
     @property
+    def storages(case):
+        try:
+            return case._storages
+        except AttributeError:
+            case._storages = OrderedDict()
+            return case._storages
+    @property
     def nbytes(case):
         return sum([o.nbytes for o in case.storages.values()])
     @property
@@ -136,13 +143,11 @@ class ProducerCase:
 class Producer(Frame):
 
     @classmethod
-    def _casebases(cls):
-        for c in super()._casebases(): yield c
-        yield ProducerCase
-    @classmethod
-    def _caseinit(cls):
-        for k, v in super()._caseinit(): yield k, v
-        yield 'storages', OrderedDict()
+    def _helperClasses(cls):
+        d = super()._helperClasses()
+        d['Case'][0].append(ProducerCase)
+        d['Storage'] = ([Storage,], OrderedDict())
+        return d
 
     def __init__(self,
             # baselines = dict(),
@@ -153,6 +158,7 @@ class Producer(Frame):
         self.outputKey = 'outputs'
         self.outVars = _outVars
         self.outDict = dict((v.name, v) for v in self.outVars)
+        self.storages = self.case.storages
 
         super().__init__(**kwargs)
 
@@ -160,13 +166,6 @@ class Producer(Frame):
         for v in self.outVars:
             yield v.name, v.value
 
-    @property
-    def storages(self):
-        try:
-            return self.case.storages
-        except AttributeError:
-            self.case.storages = OrderedDict()
-            return self.case.storages
     @property
     def storage(self):
         try:
@@ -182,7 +181,7 @@ class Producer(Frame):
                 (v.name, v.value, v.dtype)
                     for v in self.outVars
                 ))
-            storage = Storage(keys, vals, types, key)
+            storage = self.Storage(keys, vals, types, key)
             self.storages[key] = storage
         return storage
     def add_storage(self, key = None):
