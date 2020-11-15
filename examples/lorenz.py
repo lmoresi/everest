@@ -1,9 +1,13 @@
 import numpy as np
 
+from funcy import Fn
+
 from everest.frames._traversable import Traversable
 from everest.frames._chronable import Chronable
 
 class Lorenz(Traversable, Chronable):
+
+    __slots__ = ('_integrate',)
 
     def __init__(self,
             # params
@@ -13,12 +17,8 @@ class Lorenz(Traversable, Chronable):
                 dt = 0.01,
             # _configs
                 coords = [0., 1., 1.05],
-                # x = 0.,
-                # y = 1.,
-                # z = 1.05,
             **kwargs
             ):
-
         super().__init__(**kwargs)
 
         cs = self.state['coords'].data
@@ -36,15 +36,18 @@ class Lorenz(Traversable, Chronable):
         self._integrate()
         super()._iterate(**kwargs)
 
-    # def _iterate(self, **kwargs):
-    #     coords = self.state.values()
-    #     newcoords = lorenz(coords, *self.inputs.params.values())
-    #     for c, nc in zip(coords, newcoords):
-    #         c.value = nc
 
-        # x, y, z = self.state.values()
-        # self._iterFns = [
-        #     ((y - x) * s) * dt,
-        #     (x * r - y - x * z) * dt,
-        #     (x * y - z * b) * dt,
-        #     ]
+
+        # x, y, z = cs = self.state['coords']
+        # chron = self.indices['chron']
+        # fn = Fn(
+        #     x + dt * s * (y - x),
+        #     y + dt * (r * x - y - x * z),
+        #     z + dt * (x * y - b * z),
+        #     )
+        # def integrate():
+        #     cs.value = fn
+        #     chron.value += dt
+        # self._integrate = integrate
+
+# s, r, b, dt = (np.array(p) for p in self.inputs.params.values())
