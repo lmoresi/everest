@@ -23,13 +23,13 @@ class Traversable(Iterable, Configurable):
         d['StateVar'][0].append(TraversableVar)
         return d
 
-    def _configurable_changed_state_hook(self):
-        super()._configurable_changed_state_hook()
+    def _subInstantiable_change_state_hook(self):
+        super()._subInstantiable_change_state_hook()
         self.indices.nullify()
 
     def reset(self):
         self.configs.reset()
-        self._configurable_changed_state_hook()
+        self._subInstantiable_change_state_hook()
         super().reset()
 
     def reach(self, configs, *args, **kwargs):
@@ -40,6 +40,3 @@ class Traversable(Iterable, Configurable):
         self[...] = configs
         if len(args):
             super().run(*args, **kwargs)
-
-    def __setitem__(self, key, val):
-        Configurable.__setitem__(self, key, val)

@@ -1,6 +1,6 @@
 import numpy as np
 import math
-from functools import wraps, partial
+from functools import wraps, partial, cached_property, lru_cache
 from collections.abc import Mapping
 from collections import OrderedDict
 import warnings
@@ -155,7 +155,6 @@ class Producer(Frame):
             **kwargs
             ):
 
-        self.outputKey = 'outputs'
         self.outVars = _outVars
         self.outDict = dict((v.name, v) for v in self.outVars)
         self.storages = self.case.storages
@@ -166,14 +165,17 @@ class Producer(Frame):
         for v in self.outVars:
             yield v.name, v.value
 
-    @property
+    @cached_property
+    def outputKey(self):
+        return self._outputKey()
+    def _outputKey(self):
+        return 'outputs'
+
+    @cached_property
     def storage(self):
-        try:
-            return self._storage
-        except AttributeError:
-            self.add_storage()
-            return self._storage
-    def _get_storage(self, key):
+        return self.get_storage()
+    def get_storage(self, key):
+        key = self.outputKey if key is None else key
         try:
             storage = self.storages[key]
         except KeyError:
@@ -184,23 +186,8 @@ class Producer(Frame):
             storage = self.Storage(keys, vals, types, key)
             self.storages[key] = storage
         return storage
-    def add_storage(self, key = None):
-        key = self.outputKey if key is None else key
-        storage = self._get_storage(key)
-        storeFn = storage.store
-        self._store = lambda: storeFn(self.outVars)
-        self._storage = storage
-    def del_storage(self):
-        try: del self._storage
-        except AttributeError: pass
-        try: del self._store
-        except AttributeError: pass
     def store(self):
-        try:
-            self._store()
-        except AttributeError:
-            self.add_storage()
-            self._store()
+        self.storage.store(self.outVars)
     def clear(self):
         self.storage.clear()
 

@@ -5,6 +5,7 @@ import numpy as np
 
 from ._stateful import Stateful, State, DynamicState, MutableState, StateVar
 from ._configurator import Configurator
+from ._suboutputable import SubOutputable
 from ..hosted import Hosted
 from ..utilities import ordered_unpack
 from ..exceptions import *
@@ -72,7 +73,7 @@ class FrameConfigs(MutableConfigs):
     #     super().__setitem__(key, val)
     #     self.frame._configurable_changed_state_hook()
 
-class Configurable(Stateful):
+class Configurable(Stateful, SubOutputable):
 
     @classmethod
     def _helperClasses(cls):
@@ -82,29 +83,29 @@ class Configurable(Stateful):
 
     def __init__(self,
             _stateVars = [],
+            _subInstantiators = OrderedDict(),
             **kwargs
             ):
         self.configs = self.Configs(self.ghosts.configs, self.StateVar)
         _stateVars.extend(self.configs.stateVars)
-        super().__init__(_stateVars = _stateVars, **kwargs)
-        self._configurable_changed_state_hook()
+        _subInstantiators['configs'] = (self.configs)
+        super().__init__(
+            _stateVars = _stateVars,
+            _subInstantiators = _subInstantiators,
+            **kwargs
+            )
 
-    def _vector(self):
-        for pair in super()._vector(): yield pair
-        yield ('configs', self.configs)
-
-    def _configurable_changed_state_hook(self):
-        self.outputKey = 'outputs/' + self.configs.hashID
+    def _subInstantiable_change_state_hook(self):
+        super()._subInstantiable_change_state_hook()
         self.configs.apply(self.state)
-        self.del_storage()
 
-    def __setitem__(self, key, val):
-        if type(key) is tuple:
-            raise ValueError
-        if type(key) is slice:
-            raise NotYetImplemented
-        self.configs[key] = val
-        self._configurable_changed_state_hook()
+    # def __setitem__(self, key, val):
+    #     if type(key) is tuple:
+    #         raise ValueError
+    #     if type(key) is slice:
+    #         raise NotYetImplemented
+    #     self.configs[key] = val
+    #     self._configurable_changed_state_hook()
 
     # def _save(self):
     #     super()._save()

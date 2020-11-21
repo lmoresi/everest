@@ -89,7 +89,7 @@ class FrameIndices(Mapping, Hosted):
         if op is None:
             return fn, val
         else:
-            return Fn(fn, val).op(op)
+            return Fn.op(op, Fn(fn, val))
     # def _process_index(self, arg):
     #     i, ik, it = self.get_indexInfo(arg)
     #     if arg < 0.:

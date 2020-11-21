@@ -5,8 +5,7 @@
 # h5anchor
 
 import simpli as mpi
-import funcy as functions
-Fn = Function = functions.Function
+from funcy import Fn
 from h5anchor import *
 
 #
