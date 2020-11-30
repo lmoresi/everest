@@ -4,7 +4,7 @@ from . import Frame
 
 class SubInstantiable(Frame):
     def __init__(self,
-            _subInstantiators = OrderedDict()
+            _subInstantiators = OrderedDict(),
             **kwargs,
             ):
         self._subInstantiators = _subInstantiators

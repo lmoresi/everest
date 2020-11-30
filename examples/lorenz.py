@@ -7,7 +7,7 @@ from everest.frames._chronable import Chronable
 
 class Lorenz(Traversable, Chronable):
 
-    __slots__ = ('_integrate',)
+    __slots__ = ('coords', 'chron', '_integrate')
 
     def __init__(self,
             # params
@@ -19,24 +19,23 @@ class Lorenz(Traversable, Chronable):
                 coords = [0., 1., 1.05],
             **kwargs
             ):
+
         super().__init__(**kwargs)
 
-        cs = self.state['coords'].data
-        chron = self.indices['chron']
-        def integrate():
-            cs[...] = (
-                cs[0] + dt * (s * (cs[1] - cs[0])),
-                cs[1] + dt * (r * cs[0] - cs[1] - cs[0] * cs[2]),
-                cs[2] + dt * (cs[0] * cs[1] - b * cs[2]),
+        def integrate(cs, chron):
+            cs += (
+                dt * (s * (cs[1] - cs[0])),
+                dt * (r * cs[0] - cs[1] - cs[0] * cs[2]),
+                dt * (cs[0] * cs[1] - b * cs[2]),
                 )
-            chron.data = chron.data + dt
+            chron += dt
+
+        self.cs, self.chron = self.state['coords'], self.indices['chron']
         self._integrate = integrate
 
-    def _iterate(self, **kwargs):
-        self._integrate()
-        super()._iterate(**kwargs)
-
-
+    def _iterate(self):
+        self._integrate(self.cs, self.chron)
+        super()._iterate()
 
         # x, y, z = cs = self.state['coords']
         # chron = self.indices['chron']

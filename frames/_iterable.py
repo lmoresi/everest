@@ -6,7 +6,7 @@ from collections.abc import Iterable as abcIterable
 from collections.abc import Iterator as abcIterator
 import weakref
 
-from funcy import Fn, convert, NullValueDetected
+from funcy import Fn, NullValueDetected
 import wordhash
 
 from . import Frame
@@ -207,7 +207,7 @@ class Iterable(Indexable, Prompter, Stateful):
         try: self.load(stop)
         except LoadFail: raise BadStrategy
     def _try_convert(self, stop):
-        try: return convert(stop)
+        try: return Fn(stop)
         except (ValueError, TypeError): raise BadStrategy
     def _try_index(self, stop):
         try: return self.indices.get_index(stop)

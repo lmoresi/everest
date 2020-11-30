@@ -174,7 +174,7 @@ class Producer(Frame):
     @cached_property
     def storage(self):
         return self.get_storage()
-    def get_storage(self, key):
+    def get_storage(self, key = None):
         key = self.outputKey if key is None else key
         try:
             storage = self.storages[key]

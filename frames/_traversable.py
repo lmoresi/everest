@@ -7,13 +7,13 @@ class TraversableException(EverestException):
     pass
 
 class TraversableVar:
-    def mutate(self, mutator):
+    def _set_value(self, mutator):
         try:
             if v.sourceInstanceID == self.sourceInstanceID:
                 raise ValueError("Circular state var reference.")
         except AttributeError:
             pass
-        super().mutate(mutator)
+        super()._set_value(mutator)
 
 class Traversable(Iterable, Configurable):
 
@@ -25,7 +25,7 @@ class Traversable(Iterable, Configurable):
 
     def _subInstantiable_change_state_hook(self):
         super()._subInstantiable_change_state_hook()
-        self.indices.nullify()
+        self.indices.isnullify()
 
     def reset(self):
         self.configs.reset()

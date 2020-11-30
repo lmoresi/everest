@@ -7,7 +7,8 @@ import numpy as np
 
 from h5anchor.reader import PathNotInFrameError
 from h5anchor.anchor import NoActiveAnchorError
-from funcy import Fn, MutableVariable
+from funcy import Fn
+from funcy.variable import Array, Scalar
 from funcy import exceptions as funcyex
 import wordhash
 
@@ -31,7 +32,7 @@ class IndexableLoadRedundant(IndexableLoadFail):
 class NotIndexlike(TypeError, IndexableException):
     pass
 
-class IndexVar(MutableVariable):
+class IndexVar(Scalar):
     def __init__(self, *args, compType = numbers.Number, **kwargs):
         self.compType = compType
         super().__init__(*args, **kwargs)
@@ -103,7 +104,7 @@ class FrameIndices(Mapping, Hosted):
         for k in self.keys(): self[k] = 0
     @property
     def isnull(self):
-        return any([i.null for i in self.values()])
+        return any([i.isnull for i in self.values()])
     @property
     def iszero(self):
         if self.isnull:
@@ -117,13 +118,13 @@ class FrameIndices(Mapping, Hosted):
     @property
     def disk(self, key = None):
         if key is None:
-            for k in self: yield k, self.frame.readouts[k]
+            return tuple(list(self.frame.readouts[k]) for k in self)
         else:
             return self.frame.readouts[key]
     @property
     def stored(self, key = None):
         if key is None:
-            for k in self: yield k, self.frame.storage[k]
+            return tuple(list(self.frame.storage[k]) for k in self)
         else:
             return self.frame.storage[k]
     @property
@@ -165,7 +166,7 @@ class FrameIndices(Mapping, Hosted):
     #     outs = super(Indexable, self.frame)._out()
     #     add = OrderedDict(zip(
     #         self.keys(),
-    #         [OutsNull if i.null else i.value for i in self.values()]
+    #         [OutsNull if i.isnull else i.value for i in self.values()]
     #         ))
     #     outs.update(add)
     #     return outs
@@ -219,7 +220,7 @@ class FrameIndices(Mapping, Hosted):
     def __iter__(self):
         return iter(self._indexerDict)
     def __setitem__(self, key, arg):
-        self[key].value = arg
+        self[key].set(arg)
 
     def __str__(self):
         rows = [k + ': ' + str(v.data) for k, v in self.items()]
@@ -271,7 +272,7 @@ class Indexable(Producer):
         self.process_loaded(self._load_index(arg))
     def _process_loaded(self, loaded):
         for key in self.indices:
-            self.indices[key].value = loaded.pop(key)
+            self.indices[key].set(loaded.pop(key))
         return super()._process_loaded(loaded)
 
     # def _save(self):
