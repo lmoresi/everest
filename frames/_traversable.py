@@ -25,18 +25,18 @@ class Traversable(Iterable, Configurable):
 
     def _subInstantiable_change_state_hook(self):
         super()._subInstantiable_change_state_hook()
-        self.indices.isnullify()
+        self.indices.nullify()
 
     def reset(self):
         self.configs.reset()
         self._subInstantiable_change_state_hook()
         super().reset()
 
-    def reach(self, configs, *args, **kwargs):
-        self[...] = configs
-        if len(args):
-            super().reach(*args, **kwargs)
-    def run(self, configs, *args, **kwargs):
-        self[...] = configs
-        if len(args):
-            super().run(*args, **kwargs)
+    # def reach(self, configs, *args, **kwargs):
+    #     self.configs[...] = configs
+    #     if args:
+    #         super().reach(*args, **kwargs)
+    # def run(self, configs, *args, **kwargs):
+    #     self.configs[...] = configs
+    #     if args:
+    #         super().run(*args, **kwargs)

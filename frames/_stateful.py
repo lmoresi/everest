@@ -87,7 +87,7 @@ class DynamicState(State):
                 )
         for c, m in zip(mutator.values(), self.values()):
             if not c is Ellipsis:
-                m.set(c)
+                m.value = c
     def __repr__(self):
         rows = (': '.join((k, v.valstr)) for k, v in self.items())
         keyvalstr = ',\n    '.join(rows)
@@ -139,7 +139,7 @@ class Stateful(Observable, Producer):
 
     def _process_loaded(self, loaded):
         for key in self.state:
-            self.state[key].set(loaded.pop(key))
+            self.state[key].value = loaded.pop(key)
         return super()._process_loaded(loaded)
 
     # def _save(self):

@@ -220,7 +220,7 @@ class FrameIndices(Mapping, Hosted):
     def __iter__(self):
         return iter(self._indexerDict)
     def __setitem__(self, key, arg):
-        self[key].set(arg)
+        self[key].value = arg
 
     def __str__(self):
         rows = [k + ': ' + str(v.data) for k, v in self.items()]
@@ -272,7 +272,7 @@ class Indexable(Producer):
         self.process_loaded(self._load_index(arg))
     def _process_loaded(self, loaded):
         for key in self.indices:
-            self.indices[key].set(loaded.pop(key))
+            self.indices[key].value = loaded.pop(key)
         return super()._process_loaded(loaded)
 
     # def _save(self):
