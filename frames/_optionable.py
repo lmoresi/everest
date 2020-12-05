@@ -10,8 +10,8 @@ class Options(Inputs):
 class Optionable(SubInstantiable):
 
     @classmethod
-    def _helperClasses(cls):
-        d = super()._helperClasses
+    def _frameClasses(cls):
+        d = super()._frameClasses
         d['Options'] = ([Options,], OrderedDict())
         return d
 

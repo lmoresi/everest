@@ -160,8 +160,8 @@ class FrameIndices(Mapping, Hosted):
 class Indexable(Producer):
 
     @classmethod
-    def _helperClasses(cls):
-        d = super()._helperClasses()
+    def _frameClasses(cls):
+        d = super()._frameClasses()
         d['Indices'] = ([FrameIndices,], OrderedDict())
         d['IndexVar'] = ([IndexVar,], OrderedDict())
         return d

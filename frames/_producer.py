@@ -154,8 +154,8 @@ class ProducerCase(Case):
 class Producer(Sliceable):
 
     @classmethod
-    def _helperClasses(cls):
-        d = super()._helperClasses()
+    def _frameClasses(cls):
+        d = super()._frameClasses()
         d['Case'][0].insert(0, ProducerCase)
         d['Storage'] = ([Storage,], OrderedDict())
         return d
@@ -251,10 +251,8 @@ class Producer(Sliceable):
     def _process_loaded(self, loaded):
         return loaded
 
-    def _getitem(self, args, outs):
-        super()._getitem(args, outs)
-        arg = next(args)
-        outs.append(OrderedDict(self.storage[arg]))
+    def __getitem__(self, arg):
+        return tuple(self.storage.retrieve(arg))
 
     #
     # def _load_process(self, outs):

@@ -25,8 +25,8 @@ class EllipsisIterable(Iterator):
 class Sliceable(Frame):
 
     # @classmethod
-    # def _helperClasses(cls):
-    #     d = super()._helperClasses()
+    # def _frameClasses(cls):
+    #     d = super()._frameClasses()
     #     d['Case'][0].insert(0, SliceableCase)
     #     return d
 

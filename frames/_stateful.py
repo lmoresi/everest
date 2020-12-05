@@ -71,6 +71,10 @@ class State(Sequence, Mapping):
     def id(self):
         return self.hashID
 
+    @property
+    def value(self):
+        return (v.value for v in self.values())
+
 class MutableState(State):
     def __setitem__(self, key, val):
         self.vars[key] = val
@@ -115,8 +119,8 @@ class FrameState(DynamicState):
 class Stateful(Observable, Producer):
 
     @classmethod
-    def _helperClasses(cls):
-        d = super()._helperClasses()
+    def _frameClasses(cls):
+        d = super()._frameClasses()
         d['State'] = ([FrameState,], OrderedDict())
         d['StateVar'] = ([StateVar,], OrderedDict())
         return d

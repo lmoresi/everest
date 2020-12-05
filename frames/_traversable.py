@@ -27,8 +27,8 @@ class TraversableCase(Case):
 class Traversable(Iterable, Configurable):
 
     @classmethod
-    def _helperClasses(cls):
-        d = super()._helperClasses()
+    def _frameClasses(cls):
+        d = super()._frameClasses()
         d['StateVar'][0].append(TraversableVar)
         d['Case'][0].insert(0, TraversableCase)
         return d

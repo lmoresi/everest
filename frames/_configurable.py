@@ -76,8 +76,8 @@ class FrameConfigs(MutableConfigs):
 class Configurable(Stateful, SubOutputable):
 
     @classmethod
-    def _helperClasses(cls):
-        d = super()._helperClasses()
+    def _frameClasses(cls):
+        d = super()._frameClasses()
         d['Configs'] = ([FrameConfigs,], OrderedDict())
         return d
 

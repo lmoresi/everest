@@ -4,6 +4,7 @@ import warnings
 from collections import OrderedDict
 from collections.abc import Iterable as abcIterable
 from collections.abc import Iterator as abcIterator
+from collections.abc import Sequence
 import weakref
 
 from funcy import Fn, NullValueDetected
@@ -44,28 +45,167 @@ def _iterable_initialise_if_necessary(func):
             return func(self, *args, **kwargs)
     return wrapper
 
-class Stage(State):
-    def __init__(self, case, *args):
-        self.case, self.args = case, args
+class Iterator(abcIterator):
+    def __init__(self, frame, start = None, stop = None, step = None, /):
+        self.frame = frame
+        self.start = 0 if start is None else start
+        self.frame[...] = start
+        self._nextFn = self._get_nextFn(stop, step)
+        self.stopped = False
+        super().__init__()
+    def _get_nextFn(self, stop, step):
+        self.stop = self._get_stop_fn(stop)
+        self.step = self._get_step_fn(step)
+        def _nextFn():
+            while not self.stopped:
+                try:
+                    self.frame._iterate()
+                    if self.stop:
+                        self.stopped = True
+                        return self.frame._iterCount.value
+                    if self.step:
+                        return self.frame._iterCount.value
+                except (TypeError, NullValueDetected) as e:
+                    if self.frame.indices.isnull:
+                        self.frame.initialise()
+                    else:
+                        raise e
+                    return self.frame._iterCount.value
+            raise StopIteration
+        return _nextFn
+    def _get_stop_fn(self, stop, /):
+        if stop is None:
+            return False
+        try:
+            index = self.frame.indices.get_index(stop)
+            return index >= stop
+        except NotIndexlike:
+            try:
+                return stop.allclose(self.frame)
+            except AttributeError:
+                raise ExhaustedStrategies
+    def _get_step_fn(self, step, /):
+        if step is None:
+            return True
+        try:
+            index = self.frame.indices.get_index(step)
+            return ~(index % step)
+        except NotIndexlike:
+            try:
+                return step.allclose(self.frame)
+            except AttributeError:
+                raise ExhaustedStrategies
+    def out(self):
+        for v in self.outVars:
+            yield v.value
+    def __next__(self):
+        return self._nextFn()
+
+class Datalike:
+    @cached_property
+    def data(self):
+        return self._data()
+    def _data(self):
+        raise MissingAsset
+class Geometry(Datalike):
+    __slots__ = ('case', '_frame', '_repr')
+    def __init__(self, case, /, frame = None):
+        self.case = case
+        self._frame = frame
+        super().__init__()
+    @cached_property
+    def frame(self):
+        if self._frame is None:
+            return self.case()
+        else:
+            return self._frame
+    def _argstr(self):
+        raise MissingAsset
+    def __repr__(self):
+        try:
+            return self._repr
+        except AttributeError:
+            self._repr = f'{type(self).__name__}({self._argstr()})'
+            return self._repr
+class Stage(State, Geometry):
+    __slots__ = ('target')
+    def __init__(self, case, target, /, frame = None):
+        self.target = target
+        super().__init__(case, frame)
     @property
     def _vars(self):
-        frame = self.case.frame
-        frame.reach(*self.args)
-        return frame.state._vars
+        self.frame[...] = self.target
+        return self.frame.state._vars
+    def _argstr(self):
+        return ', '.join(repr(a) for a in self.target)
+    def _data(self):
+        return self.value
+class Interval(Sequence, Geometry):
+    __slots__ = ('case', 'targets', 'inds')
+    def __init__(self, case, start, stop, step, /, frame = None):
+        self.case = case
+        self.targets = start, stop, step
+        super().__init__(case, frame)
+    def compute(self):
+        frame = self.frame
+        iterator = frame.iterator(*self.targets)
+        inds = []
+        for i in iterator:
+            inds.append(i)
+            frame.store()
+        self.inds = inds
+    def _argstr(self):
+        return ', '.join(repr(a) for a in self.targets)
+    def _data(self):
+        # try:
+        #     return self.frame[self.inds]
+        # except (IndexError, AttributeError):
+        self.compute()
+        storage = self.frame.storage
+        return self.frame[[storage.index(i) for i in self.inds]]
+    def __getitem__(self, index):
+        return self.data[index]
+    def __len__(self):
+        return len(self.data)
 
-# from ._sliceable import SliceableCase
-# class IterableCase(SliceableCase):
-#     # def __getitem__(case, key, /):
-#     #     case.frame
+# class StateChannel(Geometry):
+#     __slots__ = ('geometry', 'channel')
+#     def __init__(self, geometry, channel):
+#         self.geometry, self.channel = geometry, channel
+#         super().__init__(geometry.case, geometry._frame)
+# class StageChannel(StateChannel):
 #     ...
+# class IntervalChannel(StateChannel):
+#     ...
+
+class IterableCase(Case):
+    def __getitem__(case, args):
+        if not type(args) is tuple:
+            args = args,
+        if len(args) > 1:
+            raise NotYetImplemented
+        arg = args[0]
+        if type(arg) is slice:
+            return case.Interval(case, arg.start, arg.stop, arg.step)
+        else:
+            return case.Stage(case, arg)
 
 class Iterable(Indexable, Prompter, Stateful, Sliceable):
 
-    # @classmethod
-    # def _helperClasses(cls):
-    #     d = super()._helperClasses()
-    #     d['Case'][0].insert(0, IterableCase)
-    #     return d
+    @classmethod
+    def _frameClasses(cls):
+        d = super()._frameClasses()
+        d['Case'][0].insert(0, IterableCase)
+        d['Iterator'] = ([Iterator,], OrderedDict())
+        return d
+
+    @classmethod
+    def _caseClasses(cls):
+        d = super()._caseClasses()
+        d['Geometry'] = ([Geometry,], OrderedDict())
+        d['Stage'] = ([Stage,], OrderedDict())
+        d['Interval'] = ([Interval,], OrderedDict())
+        return d
 
     def __init__(self,
             **kwargs
@@ -103,14 +243,8 @@ class Iterable(Indexable, Prompter, Stateful, Sliceable):
             self._iterate()
     def _iterate(self):
         self._iterCount += 1
-    def __iter__(self):
-        return self
-    def __next__(self):
-        try:
-            self._iterate()
-        except (TypeError, NullValueDetected):
-            self.initialise()
-        return self.state
+    def iterator(self, start = 0, stop = None, step = None):
+        return self.Iterator(self, start, stop, step)
 
     def _try_load(self, stop, /):
         try: self.load(stop)
@@ -126,17 +260,6 @@ class Iterable(Indexable, Prompter, Stateful, Sliceable):
             try: return strat(*args, **kwargs)
             except BadStrategy: pass
         raise ExhaustedStrategies("Could not find a strategy to proceed.")
-    def _get_stop_fn(self, stop, /):
-        if stop is None:
-            raise ValueError(stop)
-        try:
-            index = self._try_index(stop)
-            return index >= stop
-        except BadStrategy: pass
-        try:
-            return self._try_convert(stop).allclose(self)
-        except BadStrategy: pass
-        raise ExhaustedStrategies
 
     # REACH
     def reach(self, arg, /, *args, **kwargs):
@@ -271,13 +394,42 @@ class Iterable(Indexable, Prompter, Stateful, Sliceable):
         except NullValueDetected:
             yield "null"
     def report(self):
-        head = f"FrameInstance '{type(self).__name__}' ({self.instanceHash}):"
+        head = f" \
+            FrameInstance '{type(self).__name__}' \
+            ({self.instanceHash}): \
+            "
         return '\n    '.join((head, *self._report()))
+
+    # def _getitem(self, args, outs):
+    #     arg = next(args)
+    #     if not type(arg) is slice:
+    #         if not type(arg) is tuple:
+    #             arg = arg,
+    #         arg = slice(*arg)
+    #     for _ in self.iterator(arg.start, arg.stop, arg.step):
+    #         self.store()
+    #     super()._getitem(args, )
+
+# class Stage(State):
+#     def __init__(self, case, *args):
+#         self.case, self.args = case, args
+#     @property
+#     def _vars(self):
+#         frame = self.case.frame
+#         frame.reach(*self.args)
+#         return frame.state._vars
+
+# from ._sliceable import SliceableCase
+# class IterableCase(SliceableCase):
+#     # def __getitem__(case, key, /):
+#     #     case.frame
+#     ...
 
 
     # def __setitem__(self, key, val):
     #     if not key is Ellipsis:
-    #         raise ValueError("Can only set Iterables with Ellipsis as key.")
+    #         raise ValueError(
+    # "Can only set Iterables with Ellipsis as key.")
     #     if isinstance(val, Stage):
     #         val = val.args
     #     elif not type(val) is tuple:
@@ -362,7 +514,8 @@ class Iterable(Indexable, Prompter, Stateful, Sliceable):
 #         self.frame, self.slicer = frame, slicer
 #         super().__init__()
 #     def __iter__(self):
-#         return IntervalIterator(self.frame, self.start, self.stop, self.step)
+#         return IntervalIterator(
+# self.frame, self.start, self.stop, self.step)
 #     # def __getitem__(self, key):
 #     #     raise Exception
 #     def __repr__(self):
@@ -375,7 +528,8 @@ class Iterable(Indexable, Prompter, Stateful, Sliceable):
 #         self.start = start
 #         self.step = 1 if step is None else step
 #         super().__init__(frame, self.start)
-#         self.stop = False if stop is None else self._frame._get_stop_fn(stop)
+#         self.stop = \
+            # False if stop is None else self._frame._get_stop_fn(stop)
 #         self.i = 0
 #         self.compute()
 #     def __iter__(self):
