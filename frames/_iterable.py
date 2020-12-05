@@ -8,12 +8,13 @@ import weakref
 
 from funcy import Fn, NullValueDetected
 import wordhash
+from ptolemaic import Case
 
 from ._stateful import Stateful, State
 from ._indexable import Indexable, NotIndexlike, IndexableLoadFail
 from ._producer import LoadFail
 from ._prompter import Prompter, _prompter_prompt_all
-from ._settable import Settable
+from ._sliceable import Sliceable
 
 from ..exceptions import *
 class IterableException(EverestException):
@@ -52,32 +53,19 @@ class Stage(State):
         frame.reach(*self.args)
         return frame.state._vars
 
-class IterableCase:
-    def __getitem__(case, keys):
-        if not type(keys) is tuple:
-            keys = (keys,)
-        hashID = wordhash.w_hash(tuple((case, *keys)))
-        stage = case.stages.setdefault(hashID, Stage(case, *keys))
-        stage._hashID = hashID
-        return stage
-    @cached_property
-    def frame(case):
-        return case()
-    @property
-    def stages(case):
-        try:
-            return case._stages
-        except AttributeError:
-            case._stages = weakref.WeakValueDictionary()
-            return case._stages
+# from ._sliceable import SliceableCase
+# class IterableCase(SliceableCase):
+#     # def __getitem__(case, key, /):
+#     #     case.frame
+#     ...
 
-class Iterable(Indexable, Prompter, Stateful, Settable):
+class Iterable(Indexable, Prompter, Stateful, Sliceable):
 
-    @classmethod
-    def _helperClasses(cls):
-        d = super()._helperClasses()
-        d['Case'][0].append(IterableCase)
-        return d
+    # @classmethod
+    # def _helperClasses(cls):
+    #     d = super()._helperClasses()
+    #     d['Case'][0].insert(0, IterableCase)
+    #     return d
 
     def __init__(self,
             **kwargs
@@ -115,6 +103,14 @@ class Iterable(Indexable, Prompter, Stateful, Settable):
             self._iterate()
     def _iterate(self):
         self._iterCount += 1
+    def __iter__(self):
+        return self
+    def __next__(self):
+        try:
+            self._iterate()
+        except (TypeError, NullValueDetected):
+            self.initialise()
+        return self.state
 
     def _try_load(self, stop, /):
         try: self.load(stop)
@@ -204,10 +200,10 @@ class Iterable(Indexable, Prompter, Stateful, Settable):
         try:
             index = self._try_index(stop)
             stop = (index + stop).value
-            return self._reach_index(stop, index)
+            return self._reach_index(stop, index, **kwargs)
         except BadStrategy:
             pass
-        return self._go_fn(stop)
+        return self._go_fn(stop, **kwargs)
 
     # GO
     def go(self, /, *args, **kwargs):
@@ -267,6 +263,16 @@ class Iterable(Indexable, Prompter, Stateful, Settable):
         except TypeError:
             val = val,
         self.reach(*val)
+
+    def _report(self):
+        try:
+            yield from self.indices._report()
+            yield from self.state._report()
+        except NullValueDetected:
+            yield "null"
+    def report(self):
+        head = f"FrameInstance '{type(self).__name__}' ({self.instanceHash}):"
+        return '\n    '.join((head, *self._report()))
 
 
     # def __setitem__(self, key, val):
@@ -381,3 +387,22 @@ class Iterable(Indexable, Prompter, Stateful, Settable):
 #             self._frame.stride(self.step)
 #             self.i += 1
 #             return self._frame[None]
+#
+# class IterableCase:
+#     def __getitem__(case, keys):
+#         if not type(keys) is tuple:
+#             keys = (keys,)
+#         hashID = wordhash.w_hash(tuple((case, *keys)))
+#         stage = case.stages.setdefault(hashID, Stage(case, *keys))
+#         stage._hashID = hashID
+#         return stage
+#     @cached_property
+#     def frame(case):
+#         return case()
+#     @property
+#     def stages(case):
+#         try:
+#             return case._stages
+#         except AttributeError:
+#             case._stages = weakref.WeakValueDictionary()
+#             return case._stages

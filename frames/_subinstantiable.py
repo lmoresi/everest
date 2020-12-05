@@ -1,14 +1,14 @@
 from collections import OrderedDict
 
-from ._settable import Settable
-from ..utilities import ordered_unpack
+from ._sliceable import Sliceable
 
-class SubInstantiable(Settable):
+class SubInstantiable(Sliceable):
     def __init__(self,
             _subInstantiators = OrderedDict(),
             **kwargs,
             ):
-        self._subInstantiators = _subInstantiators
+        self._subInstantiators = \
+            OrderedDict() if _subInstantiators is None else _subInstantiators
         super().__init__(**kwargs)
         self._subInstantiable_change_state_hook()
     def _subInstantiable_change_state_hook(self):

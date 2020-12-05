@@ -58,16 +58,12 @@ class State(Sequence, Mapping):
             raise KeyError(state.keys(), self.keys())
         state.mutate(self)
 
+    def _valstr(self):
+        return ', '.join(f'{k} : {repr(v)}' for k, v in self.items())
     def __str__(self):
-        rows = []
-        for k, v in self.items():
-            row = k + ': '
-            row += v.hashID if hasattr(v, 'hashID') else repr(v)
-            rows.append(row)
-        keyvalstr = ',\n    '.join(rows)
-        return '{\n    ' + keyvalstr + ',\n    }'
+        return f'{repr(self)} == {self._valstr()}'
     def __repr__(self):
-        return type(self).__name__ + str(self)
+        return type(self).__name__
     @property
     def hashID(self):
         return wordhash.w_hash(repr(self))
@@ -88,21 +84,18 @@ class DynamicState(State):
         for c, m in zip(mutator.values(), self.values()):
             if not c is Ellipsis:
                 m.value = c
-    def __repr__(self):
-        rows = (': '.join((k, v.valstr)) for k, v in self.items())
-        keyvalstr = ',\n    '.join(rows)
-        return type(self).__name__ + '{\n    ' + keyvalstr + ',\n    }'
 
 class FrameState(DynamicState):
-
-    def __init__(self, _stateVars, instanceID, stateVarClass):
-        self.StateVar = stateVarClass
+    def __init__(self, frame, _stateVars):
+        self.StateVar = frame.StateVar
+        self.sourceInstanceID = frame.instanceID
+        self.sourceInstanceHash = frame.instanceHash
         self._vars = OrderedDict(
             (v.name, v) for v in _stateVars
             )
         for v in self._vars.values():
             assert isinstance(v, self.StateVar)
-            v.sourceInstanceID = instanceID
+            v.sourceInstanceID = self.sourceInstanceID
         super().__init__()
     def mutate(self, mutator):
         if isinstance(mutator, FrameState):
@@ -111,13 +104,13 @@ class FrameState(DynamicState):
                 behaviour is not guaranteed."
                 )
         super().mutate(mutator)
-
-    def load_process(self, outs):
-        raise NotYetImplemented
-        # outs = super(Stateful, self.frame)._load_process(outs)
-        # for k, v in self.items():
-        #     v.value = outs.pop(k)
-        # return outs
+    def __repr__(self):
+        return f'{super().__repr__()}({self.sourceInstanceHash})'
+    def _report(self):
+        for k, v in self.items():
+            yield f'{k} == {str(v.value)}'
+    def report(self, joined = True):
+        return '\n'.join(self._report())
 
 class Stateful(Observable, Producer):
 
@@ -129,11 +122,13 @@ class Stateful(Observable, Producer):
         return d
 
     def __init__(self,
-            _stateVars = [],
-            _outVars = [],
+            _stateVars = None,
+            _outVars = None,
             **kwargs
             ):
-        self.state = self.State(_stateVars, self.instanceID, self.StateVar)
+        _stateVars = [] if _stateVars is None else _stateVars
+        _outVars = [] if _outVars is None else _outVars
+        self.state = self.State(self, _stateVars)
         _outVars.extend(_stateVars)
         super().__init__(_outVars = _outVars, **kwargs)
 

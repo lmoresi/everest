@@ -82,10 +82,13 @@ class Configurable(Stateful, SubOutputable):
         return d
 
     def __init__(self,
-            _stateVars = [],
-            _subInstantiators = OrderedDict(),
+            _stateVars = None,
+            _subInstantiators = None,
             **kwargs
             ):
+        _stateVars = [] if _stateVars is None else _stateVars
+        _subInstantiators = \
+            OrderedDict() if _subInstantiators is None else _subInstantiators
         self.configs = self.Configs(self.ghosts.configs, self.StateVar)
         _stateVars.extend(self.configs.stateVars)
         _subInstantiators['configs'] = (self.configs)

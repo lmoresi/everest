@@ -9,11 +9,13 @@ import time
 import wordhash
 from h5anchor import Reader, Writer, disk
 from h5anchor.array import AnchorArray
+from ptolemaic import Case
 # import reseed
 
 from . import Frame
 from ..exceptions import *
 from ..utilities import prettify_nbytes
+from ._sliceable import Sliceable
 
 class ProducerException(EverestException):
     pass
@@ -67,9 +69,11 @@ class Storage(Mapping):
         self.storedList = storedList
         self.stored = OrderedDict(zip(keys, self.storedList))
         self.keys = self.stored.keys
+        self.primekey = list(self.keys())[0]
         self.blocklen = blocklen
         self.storedCount = 0
         self.name = name
+        self.tidied = True
     def store(self, outs):
         for s, v in zip(self.storedList, outs):
             try:
@@ -77,21 +81,26 @@ class Storage(Mapping):
             except TypeError:
                 raise TypeError(v)
         self.storedCount += 1
+        self.tidied = False
     def __len__(self):
         return self.storedCount
-    def __getitem__(self, key):
-        try: return self.stored[key][:self.storedCount]
-        except KeyError: pass
-        try: return self.storedList[key][:self.storedCount]
-        except (TypeError, IndexError): pass
-        raise KeyError
+    def __getitem__(self, arg):
+        if type(arg) is str:
+            return self.stored[arg][:self.storedCount]
+        elif arg is None:
+            return self.stored[self.primekey][:self.storedCount]
+        else:
+            self.tidy()
+            return self.retrieve(arg)
     def __iter__(self):
         return iter(self.stored)
     def clear(self, silent = False):
         self.storedCount = 0
-    def retrieve(self, index):
+    def retrieve(self, index, /):
         for k in self:
-            yield k, self[k][index]
+            yield self[k][index]
+    def retrieve_dict(self, index, /):
+        return OrderedDict(zip(self.keys(), self.retrieve(index)))
     def winnow(self, indices, invert = False):
         if invert:
             allIndices = np.arange(self.storedCount)
@@ -101,13 +110,15 @@ class Storage(Mapping):
             subData = self[key]
             subData[:length] = subData[indices]
         self.storedCount = length
-    def drop_duplicates(self, key = 0):
+    def drop_duplicates(self, key = None, /):
         self.winnow(np.unique(self[key], return_index = True)[1])
-    def sort(self, key = 0):
+    def sort(self, key = None, /):
         self.winnow(np.argsort(self[key]))
     def tidy(self):
-        self.drop_duplicates()
-        self.sort()
+        if not self.tidied:
+            self.drop_duplicates()
+            self.sort()
+            self.tidied = True
     def pop(self, index):
         toReturn = self.retrieve(index)
     def drop(self, index):
@@ -116,7 +127,7 @@ class Storage(Mapping):
             np.arange(index + 1, self.storedCount)
             ])
         self.winnow(indices)
-    def index(self, val, key = 0):
+    def index(self, val, /, key = None):
         return np.argwhere(self[key] == val)[0][0]
     @property
     def nbytes(self):
@@ -125,7 +136,7 @@ class Storage(Mapping):
     def strnbytes(self):
         return prettify_nbytes(self.nbytes)
 
-class ProducerCase:
+class ProducerCase(Case):
     @property
     def storages(case):
         try:
@@ -140,22 +151,22 @@ class ProducerCase:
     def strnbytes(case):
         return prettify_nbytes(case.nbytes)
 
-class Producer(Frame):
+class Producer(Sliceable):
 
     @classmethod
     def _helperClasses(cls):
         d = super()._helperClasses()
-        d['Case'][0].append(ProducerCase)
+        d['Case'][0].insert(0, ProducerCase)
         d['Storage'] = ([Storage,], OrderedDict())
         return d
 
     def __init__(self,
             # baselines = dict(),
-            _outVars = [],
+            _outVars = None,
             **kwargs
             ):
 
-        self.outVars = _outVars
+        self.outVars = [] if _outVars is None else _outVars
         self.outDict = dict((v.name, v) for v in self.outVars)
         self.storages = self.case.storages
 
@@ -227,7 +238,7 @@ class Producer(Frame):
         return self._load_stored(i)
     def _load_stored(self, i):
         try:
-            loaded = OrderedDict(self.storage.retrieve(i))
+            loaded = self.storage.retrieve_dict(i)
             loaded.name = self.storage.name
             return loaded
         except IndexError:
@@ -240,12 +251,10 @@ class Producer(Frame):
     def _process_loaded(self, loaded):
         return loaded
 
-    def __getitem__(self, key):
-        try: return self.outDict[key]
-        except KeyError: pass
-        try: return self.outVars[key]
-        except (TypeError, IndexError): pass
-        raise KeyError
+    def _getitem(self, args, outs):
+        super()._getitem(args, outs)
+        arg = next(args)
+        outs.append(OrderedDict(self.storage[arg]))
 
     #
     # def _load_process(self, outs):
